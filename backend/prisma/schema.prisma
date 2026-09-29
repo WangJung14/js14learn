@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ProgressStatus {
+  LOCKED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ExerciseDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum ActivityType {
+  COMPLETED_DAY
+  SUBMITTED_EXERCISE
+  JOINED_GROUP
+  UPLOADED_PROJECT
+}
+
+model User {
+  id               String        @id @default(uuid())
+  name             String
+  email            String        @unique
+  passwordHash     String
+  refreshTokenHash String?
+  avatarUrl        String?
+  role             Role          @default(STUDENT)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  groupMembers GroupMember[]
+  submissions  Submission[]
+  progress     Progress[]
+  activities   Activity[]
+}
+
+model Group {
+  id         String        @id @default(uuid())
+  name       String
+  inviteCode String        @unique
+  createdAt  DateTime      @default(now())
+
+  members    GroupMember[]
+}
+
+model GroupMember {
+  id       String   @id @default(uuid())
+  userId   String
+  groupId  String
+  joinedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model StudyDay {
+  id          String   @id @default(uuid())
+  dayNumber   Int      @unique
+  title       String
+  description String
+  content     String
+  order       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  exercises Exercise[]
+  progress  Progress[]
+}
+
+model Exercise {
+  id          String             @id @default(uuid())
+  studyDayId  String
+  title       String
+  description String
+  difficulty  ExerciseDifficulty @default(EASY)
+  order       Int
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  studyDay    StudyDay     @relation(fields: [studyDayId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@index([studyDayId])
+}
+
+model Submission {
+  id          String           @id @default(uuid())
+  exerciseId  String
+  userId      String
+  fileName    String
+  fileUrl     String
+  note        String?
+  adminNote   String?
+  status      SubmissionStatus @default(PENDING)
+  submittedAt DateTime         @default(now())
+  reviewedAt  DateTime?
+
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([exerciseId])
+  @@index([userId])
+}
+
+model Progress {
+  id          String         @id @default(uuid())
+  userId      String
+  studyDayId  String
+  status      ProgressStatus @default(LOCKED)
+  completedAt DateTime?
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studyDay StudyDay @relation(fields: [studyDayId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, studyDayId])
+  @@index([userId])
+  @@index([studyDayId])
+}
+
+model Activity {
+  id        String       @id @default(uuid())
+  userId    String
+  type      ActivityType
+  message   String
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

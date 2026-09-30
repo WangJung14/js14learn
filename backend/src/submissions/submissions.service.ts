@@ -17,6 +17,7 @@ import {
   ActivityType,
   Role,
 } from '@prisma/client';
+import { ChecklistsService } from '../checklists/checklists.service';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -59,6 +60,7 @@ export class SubmissionsService {
   constructor(
     private prisma: PrismaService,
     private storageService: StorageService,
+    private checklistsService: ChecklistsService,
   ) {}
 
   private validateUploadedFile(file: MulterFile): void {
@@ -402,6 +404,13 @@ export class SubmissionsService {
 
       return reviewed;
     });
+
+    if (dto.status === SubmissionStatus.APPROVED) {
+      await this.checklistsService.autoCompleteLinkedExerciseItem(
+        submission.userId,
+        submission.exerciseId,
+      );
+    }
 
     return this.attachSignedUrl(updatedSubmission);
   }

@@ -12,6 +12,13 @@ export type ActivityType =
   | 'JOINED_GROUP'
   | 'UPLOADED_PROJECT';
 
+export type ChecklistItemType =
+  | 'LESSON'
+  | 'EXERCISE'
+  | 'CHECKPOINT'
+  | 'PROJECT'
+  | 'CUSTOM';
+
 export interface User {
   id: string;
   name: string;
@@ -180,6 +187,73 @@ export interface Activity {
   };
 }
 
+export interface ChecklistItem {
+  id: string;
+  studyDayId: string;
+  title: string;
+  description?: string | null;
+  type: ChecklistItemType;
+  order: number;
+  isRequired: boolean;
+  exerciseId?: string | null;
+  exercise?: {
+    id: string;
+    title: string;
+    difficulty: ExerciseDifficulty;
+  } | null;
+  isCompleted: boolean;
+  completedAt?: string | null;
+  isAutoManaged?: boolean;
+}
+
+export interface ChecklistSummary {
+  totalItems: number;
+  completedItems: number;
+  requiredItems: number;
+  completedRequiredItems: number;
+  percentage: number;
+}
+
+export interface StudyDayChecklistData {
+  studyDay?: {
+    id: string;
+    dayNumber: number;
+    title: string;
+    description?: string;
+  };
+  summary: ChecklistSummary;
+  items: ChecklistItem[];
+}
+
+export interface Attendance {
+  id: string;
+  userId: string;
+  date: string;
+  checkedInAt: string;
+  checkedOutAt?: string | null;
+  durationMinutes: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TodayAttendanceData {
+  isCheckedIn: boolean;
+  date: string;
+  attendance: Attendance | null;
+}
+
+export interface AttendanceStatsData {
+  today: TodayAttendanceData;
+  statistics: {
+    currentStreak: number;
+    longestStreak: number;
+    totalAttendanceDays: number;
+    totalStudyMinutes: number;
+    averageStudyMinutes: number;
+  };
+  recentRecords: Attendance[];
+}
+
 export interface DashboardData {
   user: User;
   progress: {
@@ -196,6 +270,15 @@ export interface DashboardData {
     description: string;
     exerciseCount: number;
   } | null;
+  todayChecklist?: StudyDayChecklistData;
+  todayAttendance?: TodayAttendanceData;
+  attendanceStats?: {
+    currentStreak: number;
+    longestStreak: number;
+    totalAttendanceDays: number;
+    totalStudyMinutes: number;
+    averageStudyMinutes: number;
+  };
   statistics: {
     completedDays: number;
     totalDays: number;

@@ -18,6 +18,8 @@ import { ProgressBar } from '@/components/ui/progress-bar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatTimeAgo } from '@/lib/utils';
+import { AttendanceWidget } from '@/components/attendance/attendance-widget';
+import { StudyDayChecklist } from '@/components/checklists/study-day-checklist';
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -153,6 +155,12 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Attendance & Checklist Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <AttendanceWidget compact initialData={data.todayAttendance} />
+        <StudyDayChecklist compact title="Today's Study Checklist" initialData={data.todayChecklist} />
       </div>
 
       {/* Statistics 4-Card Grid */}

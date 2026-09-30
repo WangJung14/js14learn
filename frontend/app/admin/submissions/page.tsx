@@ -49,7 +49,7 @@ export default function AdminSubmissionsPage() {
   }, [filterStatus]);
 
   useEffect(() => {
-    fetchSubmissions();
+    void fetchSubmissions();
   }, [fetchSubmissions]);
 
   const handleOpenReview = (sub: Submission) => {

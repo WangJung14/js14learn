@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProgressStatus } from '@prisma/client';
+import { ChecklistsService } from '../checklists/checklists.service';
+import { AttendanceService } from '../attendance/attendance.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private checklistsService: ChecklistsService,
+    private attendanceService: AttendanceService,
+  ) {}
 
   async getDashboardData(userId: string) {
     const user = await this.prisma.user.findUnique({
@@ -61,6 +67,11 @@ export class DashboardService {
       completedDaysCount < totalDays ? completedDaysCount + 1 : totalDays;
     const currentDay =
       studyDays.find((d) => d.dayNumber === currentDayNumber) || null;
+
+    // Fetch Today's Checklist & Attendance info
+    const todayChecklist =
+      await this.checklistsService.getTodayChecklist(userId);
+    const attendanceStats = await this.attendanceService.getStats(userId);
 
     // Recent group activity
     const membership = await this.prisma.groupMember.findFirst({
@@ -124,6 +135,12 @@ export class DashboardService {
             exerciseCount: currentDay._count.exercises,
           }
         : null,
+      todayChecklist: {
+        summary: todayChecklist.summary,
+        items: todayChecklist.items,
+      },
+      todayAttendance: attendanceStats.today,
+      attendanceStats: attendanceStats.statistics,
       statistics: {
         completedDays: completedDaysCount,
         totalDays,
@@ -132,7 +149,7 @@ export class DashboardService {
         totalSubmissions: totalSubmissionsCount,
         pendingSubmissions: pendingSubmissionsCount,
         rejectedSubmissions: rejectedSubmissionsCount,
-        streakDays: Math.min(completedDaysCount, 5),
+        streakDays: attendanceStats.statistics.currentStreak,
       },
       recentActivity,
     };

@@ -57,9 +57,9 @@ export function ActivityFeed({
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError(null);
     const load = async () => {
+      setLoading(true);
+      setError(null);
       try {
         const data =
           activeTab === 'group'

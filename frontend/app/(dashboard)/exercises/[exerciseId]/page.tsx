@@ -3,7 +3,7 @@
 import React, { useEffect, useState, use, useCallback } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Code2, Upload, FileCode, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
-import { exercisesApi, submissionsApi } from '@/lib/api';
+import { exercisesApi, submissionsApi, attendanceApi } from '@/lib/api';
 import { Exercise, Submission } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +34,8 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
       ]);
       setExercise(exData);
       setSubmissions(mySubs.filter((s) => s.exerciseId === exerciseId));
+      // Automatic attendance check-in for learning context
+      attendanceApi.checkIn().catch(() => {});
     } catch (err: unknown) {
       setError((err as Error).message || 'Failed to load exercise details.');
     } finally {

@@ -167,17 +167,21 @@ export const exercisesApi = {
     });
   },
 };
-
 export const submissionsApi = {
   async submit(data: {
     exerciseId: string;
-    fileName: string;
-    fileUrl: string;
+    file: File;
     note?: string;
   }): Promise<Submission> {
+    const formData = new FormData();
+    formData.append('exerciseId', data.exerciseId);
+    formData.append('file', data.file);
+    if (data.note) {
+      formData.append('note', data.note);
+    }
     return apiClient<Submission>('/submissions', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: formData,
     });
   },
 

@@ -43,7 +43,11 @@ describe('AuthService', () => {
           provide: JwtService,
           useValue: {
             signAsync: jest.fn().mockResolvedValue('mocked-token'),
-            verify: jest.fn().mockReturnValue({ sub: 'user-uuid-1', email: 'student@example.com', role: Role.STUDENT }),
+            verify: jest.fn().mockReturnValue({
+              sub: 'user-uuid-1',
+              email: 'student@example.com',
+              role: Role.STUDENT,
+            }),
           },
         },
         {
@@ -65,7 +69,7 @@ describe('AuthService', () => {
 
   describe('register', () => {
     it('should throw ConflictException if user email exists', async () => {
-      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser as any);
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser);
 
       await expect(
         authService.register({
@@ -78,8 +82,8 @@ describe('AuthService', () => {
 
     it('should successfully register a new student', async () => {
       jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(null);
-      jest.spyOn(prismaService.user, 'create').mockResolvedValue(mockUser as any);
-      jest.spyOn(prismaService.user, 'update').mockResolvedValue(mockUser as any);
+      jest.spyOn(prismaService.user, 'create').mockResolvedValue(mockUser);
+      jest.spyOn(prismaService.user, 'update').mockResolvedValue(mockUser);
 
       const result = await authService.register({
         name: 'Test Student',
@@ -106,7 +110,7 @@ describe('AuthService', () => {
     });
 
     it('should throw UnauthorizedException for invalid password', async () => {
-      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser as any);
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser);
 
       await expect(
         authService.login({
@@ -117,8 +121,8 @@ describe('AuthService', () => {
     });
 
     it('should successfully log in with valid credentials', async () => {
-      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser as any);
-      jest.spyOn(prismaService.user, 'update').mockResolvedValue(mockUser as any);
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser);
+      jest.spyOn(prismaService.user, 'update').mockResolvedValue(mockUser);
 
       const result = await authService.login({
         email: 'student@example.com',

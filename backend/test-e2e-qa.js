@@ -41,8 +41,63 @@ function request(urlPath, method = 'GET', body = null, token = null) {
   });
 }
 
+function uploadFileMultipart(urlPath, exerciseId, fileName, fileContentBuffer, contentType, token, note = '') {
+  return new Promise((resolve, reject) => {
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+    const url = new URL(API_BASE + urlPath);
+
+    let postData = '';
+    postData += `--${boundary}\r\n`;
+    postData += `Content-Disposition: form-data; name="exerciseId"\r\n\r\n${exerciseId}\r\n`;
+
+    if (note) {
+      postData += `--${boundary}\r\n`;
+      postData += `Content-Disposition: form-data; name="note"\r\n\r\n${note}\r\n`;
+    }
+
+    postData += `--${boundary}\r\n`;
+    postData += `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n`;
+    postData += `Content-Type: ${contentType}\r\n\r\n`;
+
+    const footer = `\r\n--${boundary}--\r\n`;
+
+    const headerBuf = Buffer.from(postData, 'utf-8');
+    const footerBuf = Buffer.from(footer, 'utf-8');
+    const payload = Buffer.concat([headerBuf, fileContentBuffer, footerBuf]);
+
+    const options = {
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname + url.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': payload.length,
+        'Authorization': `Bearer ${token}`,
+      },
+    };
+
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => (data += chunk));
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve({ status: res.statusCode, data: parsed });
+        } catch {
+          resolve({ status: res.statusCode, raw: data });
+        }
+      });
+    });
+
+    req.on('error', (err) => reject(err));
+    req.write(payload);
+    req.end();
+  });
+}
+
 async function runQA() {
-  console.log('=== STARTING PHASE 4.5 END-TO-END INTEGRATION QA ===\n');
+  console.log('=== STARTING PHASE 4.5 & SUPABASE STORAGE INTEGRATION QA ===\n');
   const results = [];
 
   const assert = (title, condition, extraInfo = '') => {
@@ -108,64 +163,102 @@ async function runQA() {
     const exDetail = await request(`/exercises/${targetExercise.id}`, 'GET', null, studentToken);
     assert('10. GET /api/exercises/:id returns exercise detail', exDetail.status === 200 && exDetail.data?.title);
 
-    // 11. Create Submission
-    const subRes = await request('/submissions', 'POST', {
-      exerciseId: targetExercise.id,
-      fileName: 'solution_day1.js',
-      fileUrl: 'https://example.com/solution_day1.js',
-      note: 'Automated QA test submission solution',
-    }, studentToken);
-    assert('11. POST /api/submissions creates submission record (PENDING)', subRes.status === 201 && subRes.data?.status === 'PENDING');
+    // 11. Create Submission via Multipart Upload to Supabase Storage
+    const sampleJsBuffer = Buffer.from('function solution() { return "Day 1 Solution"; }', 'utf-8');
+    const subRes = await uploadFileMultipart(
+      '/submissions',
+      targetExercise.id,
+      'solution_day1.js',
+      sampleJsBuffer,
+      'application/javascript',
+      studentToken,
+      'Automated Supabase Storage QA test submission',
+    );
+    if (!subRes.data?.signedUrl) {
+      console.log('Test 11 subRes debug:', JSON.stringify(subRes));
+    }
+    assert(
+      '11. POST /api/submissions (multipart) uploads binary file to Supabase Storage & creates submission (PENDING)',
+      (subRes.status === 200 || subRes.status === 201) && subRes.data?.status === 'PENDING' && subRes.data?.signedUrl !== undefined,
+      JSON.stringify(subRes.data),
+    );
     const submissionId = subRes.data?.id;
 
-    // 12. View Submission Detail /submissions/:id
+    // 12. View Submission Detail /submissions/:id (returns signedUrl)
     const subDetail = await request(`/submissions/${submissionId}`, 'GET', null, studentToken);
-    assert('12. GET /api/submissions/:id returns submission detail', subDetail.status === 200 && subDetail.data?.fileName === 'solution_day1.js');
+    assert(
+      '12. GET /api/submissions/:id returns submission detail with signedUrl',
+      subDetail.status === 200 && subDetail.data?.fileName === 'solution_day1.js' && Boolean(subDetail.data?.signedUrl),
+    );
 
     // 13. View My Submissions /submissions/me
     const mySubmissions = await request('/submissions/me', 'GET', null, studentToken);
-    assert('13. GET /api/submissions/me returns list of my submissions', mySubmissions.status === 200 && Array.isArray(mySubmissions.data));
+    assert('13. GET /api/submissions/me returns list of my submissions with signedUrls', mySubmissions.status === 200 && Array.isArray(mySubmissions.data));
 
-    // 14. Student Route Guard Check (Accessing Admin API endpoint with Student Token -> expect 403)
+    // 14. Invalid File Size Test (> 10MB)
+    const hugeBuffer = Buffer.alloc(11 * 1024 * 1024); // 11MB
+    const hugeUpload = await uploadFileMultipart(
+      '/submissions',
+      targetExercise.id,
+      'huge_file.js',
+      hugeBuffer,
+      'application/javascript',
+      studentToken,
+    );
+    assert('14. Uploading >10MB file fails with 400 Bad Request', hugeUpload.status === 400);
+
+    // 15. Invalid File Format Test (.exe)
+    const exeBuffer = Buffer.from('binary', 'utf-8');
+    const exeUpload = await uploadFileMultipart(
+      '/submissions',
+      targetExercise.id,
+      'malicious.exe',
+      exeBuffer,
+      'application/x-msdownload',
+      studentToken,
+    );
+    assert('15. Uploading unsupported file extension (.exe) fails with 400 Bad Request', exeUpload.status === 400);
+
+    // 16. Student Route Guard Check (Accessing Admin API endpoint with Student Token -> expect 403)
     const unauthorizedCheck = await request('/admin/submissions', 'GET', null, studentToken);
-    assert('14. Student accessing Admin endpoint returns 403 Forbidden', unauthorizedCheck.status === 403);
+    assert('16. Student accessing Admin endpoint returns 403 Forbidden', unauthorizedCheck.status === 403);
 
-    // 15. Admin Login
+    // 17. Admin Login
     const adminLogin = await request('/auth/login', 'POST', {
       email: 'admin@jsstudyhub.local',
       password: 'admin123',
     });
-    assert('15. POST /api/auth/login (Admin)', (adminLogin.status === 200 || adminLogin.status === 201) && adminLogin.data?.user?.role === 'ADMIN');
+    assert('17. POST /api/auth/login (Admin)', (adminLogin.status === 200 || adminLogin.status === 201) && adminLogin.data?.user?.role === 'ADMIN');
     const adminToken = adminLogin.data?.tokens?.accessToken;
 
-    // 16. Admin Get Pending Submissions /admin/submissions?status=PENDING
+    // 18. Admin Get Pending Submissions /admin/submissions?status=PENDING
     const adminPending = await request('/admin/submissions?status=PENDING', 'GET', null, adminToken);
-    assert('16. GET /api/admin/submissions returns pending submissions queue', adminPending.status === 200 && Array.isArray(adminPending.data));
+    assert('18. GET /api/admin/submissions returns pending submissions queue with signedUrls', adminPending.status === 200 && Array.isArray(adminPending.data));
 
-    // 17. Admin Review Submission (Approve)
+    // 19. Admin Review Submission (Approve)
     const reviewRes = await request(`/admin/submissions/${submissionId}/review`, 'PATCH', {
       status: 'APPROVED',
-      adminNote: 'Excellent solution! Passed all test cases.',
+      adminNote: 'Excellent solution uploaded to Supabase! Passed all test cases.',
     }, adminToken);
-    assert('17. PATCH /api/admin/submissions/:id/review updates status to APPROVED', reviewRes.status === 200 && reviewRes.data?.status === 'APPROVED');
+    assert('19. PATCH /api/admin/submissions/:id/review updates status to APPROVED', reviewRes.status === 200 && reviewRes.data?.status === 'APPROVED');
 
-    // 18. Re-verify Student Progress updates
+    // 20. Re-verify Student Progress updates
     const updatedProgress = await request('/progress', 'GET', null, studentToken);
-    assert('18. GET /api/progress reflects updated completed exercises', updatedProgress.status === 200 && updatedProgress.data?.percentage !== undefined);
+    assert('20. GET /api/progress reflects updated completed exercises', updatedProgress.status === 200 && updatedProgress.data?.percentage !== undefined);
 
-    // 19. Group API /groups/me
+    // 21. Group API /groups/me
     const groupRes = await request('/groups/me', 'GET', null, studentToken);
-    assert('19. GET /api/groups/me returns user group', groupRes.status === 200 && groupRes.data?.name);
+    assert('21. GET /api/groups/me returns user group', groupRes.status === 200 && groupRes.data?.name);
 
-    // 20. Profile Update /users/me
+    // 22. Profile Update /users/me
     const profileUpdate = await request('/users/me', 'PATCH', {
       name: 'Tommy Student (Updated)',
     }, studentToken);
-    assert('20. PATCH /api/users/me updates profile name', profileUpdate.status === 200 && profileUpdate.data?.name === 'Tommy Student (Updated)');
+    assert('22. PATCH /api/users/me updates profile name', profileUpdate.status === 200 && profileUpdate.data?.name === 'Tommy Student (Updated)');
 
-    // 21. Admin User Management /users
+    // 23. Admin User Management /users
     const usersList = await request('/users', 'GET', null, adminToken);
-    assert('21. GET /api/users (Admin) returns all registered users', usersList.status === 200 && Array.isArray(usersList.data));
+    assert('23. GET /api/users (Admin) returns all registered users', usersList.status === 200 && Array.isArray(usersList.data));
 
     // Summary
     console.log('\n=== INTEGRATION QA SUMMARY ===');

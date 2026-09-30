@@ -15,6 +15,7 @@ import { ProgressModule } from './progress/progress.module';
 import { GroupsModule } from './groups/groups.module';
 import { ActivityModule } from './activity/activity.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { StorageModule } from './storage/storage.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 @Module({
@@ -24,6 +25,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
       envFilePath: '.env',
     }),
     PrismaModule,
+    StorageModule,
     AuthModule,
     UsersModule,
     StudyDaysModule,

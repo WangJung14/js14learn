@@ -3,8 +3,12 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
+import * as path from 'path';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { ReviewSubmissionDto } from './dto/review-submission.dto';
 import {
@@ -14,11 +18,123 @@ import {
   Role,
 } from '@prisma/client';
 
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const ALLOWED_MIME_TYPES: Record<string, string[]> = {
+  '.js': [
+    'application/javascript',
+    'text/javascript',
+    'application/x-javascript',
+    'text/plain',
+  ],
+  '.ts': [
+    'video/mp2t',
+    'text/typescript',
+    'application/typescript',
+    'text/plain',
+    'application/octet-stream',
+  ],
+  '.zip': [
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/octet-stream',
+  ],
+  '.pdf': ['application/pdf'],
+  '.png': ['image/png'],
+};
+
+export class MulterFile {
+  fieldname!: string;
+  originalname!: string;
+  encoding!: string;
+  mimetype!: string;
+  size!: number;
+  buffer!: Buffer;
+}
+
 @Injectable()
 export class SubmissionsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(SubmissionsService.name);
 
-  async submit(userId: string, dto: CreateSubmissionDto) {
+  constructor(
+    private prisma: PrismaService,
+    private storageService: StorageService,
+  ) {}
+
+  private validateUploadedFile(file: MulterFile): void {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('A valid solution file must be uploaded');
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      throw new BadRequestException(
+        `File size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds the maximum allowed limit of 10 MB`,
+      );
+    }
+
+    const ext = path.extname(file.originalname).toLowerCase();
+    const validMimes = ALLOWED_MIME_TYPES[ext];
+
+    if (!ext || !validMimes) {
+      throw new BadRequestException(
+        `Invalid file extension "${ext}". Allowed extensions: .js, .ts, .zip, .pdf, .png`,
+      );
+    }
+
+    // Check MIME type against allowed list for this extension
+    const isMimeValid = validMimes.includes(file.mimetype);
+    if (!isMimeValid) {
+      this.logger.warn(
+        `MIME type mismatch for file ${file.originalname}: received "${file.mimetype}" for ext "${ext}"`,
+      );
+      // Allow octet-stream/text-plain fallbacks if extension is explicitly valid
+      if (!['application/octet-stream', 'text/plain'].includes(file.mimetype)) {
+        throw new BadRequestException(
+          `Invalid file MIME type "${file.mimetype}" for extension "${ext}"`,
+        );
+      }
+    }
+  }
+
+  private sanitizeFilename(originalname: string): string {
+    const parsed = path.parse(originalname);
+    const safeName = parsed.name.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
+    const safeExt = parsed.ext.toLowerCase();
+    return `${safeName}${safeExt}`;
+  }
+
+  private async attachSignedUrl<
+    T extends { fileUrl: string; signedUrl?: string },
+  >(submission: T): Promise<T & { signedUrl: string }> {
+    if (!submission.fileUrl) {
+      return { ...submission, signedUrl: '' };
+    }
+
+    // Backward compatibility: If fileUrl is an existing external URL (e.g. seed data or legacy link), return as-is
+    if (
+      submission.fileUrl.startsWith('http://') ||
+      submission.fileUrl.startsWith('https://')
+    ) {
+      return { ...submission, signedUrl: submission.fileUrl };
+    }
+
+    try {
+      const signedUrl = await this.storageService.createSignedUrl(
+        submission.fileUrl,
+        3600,
+      );
+      return { ...submission, signedUrl };
+    } catch (err: unknown) {
+      this.logger.error(
+        `Failed to generate signed URL for object path "${submission.fileUrl}": ${(err as Error).message}`,
+      );
+      return { ...submission, signedUrl: submission.fileUrl };
+    }
+  }
+
+  async submit(userId: string, file: MulterFile, dto: CreateSubmissionDto) {
+    this.validateUploadedFile(file);
+
     const exercise = await this.prisma.exercise.findUnique({
       where: { id: dto.exerciseId },
       include: { studyDay: true },
@@ -34,60 +150,88 @@ export class SubmissionsService {
       where: { id: userId },
     });
 
-    const submission = await this.prisma.$transaction(async (tx) => {
-      const sub = await tx.submission.create({
-        data: {
-          exerciseId: dto.exerciseId,
-          userId,
-          fileName: dto.fileName.trim(),
-          fileUrl: dto.fileUrl.trim(),
-          note: dto.note ? dto.note.trim() : null,
-          status: SubmissionStatus.PENDING,
-        },
-        include: {
-          exercise: {
-            select: { id: true, title: true, studyDayId: true },
-          },
-        },
-      });
+    const submissionId = crypto.randomUUID();
+    const safeFileName = this.sanitizeFilename(file.originalname);
+    const objectPath = `${userId}/${submissionId}/${safeFileName}`;
 
-      // Ensure student progress for this study day is at least IN_PROGRESS
-      await tx.progress.upsert({
-        where: {
-          userId_studyDayId: {
+    // Step 1: Upload file buffer to Supabase Storage
+    await this.storageService.uploadFile(
+      objectPath,
+      file.buffer,
+      file.mimetype,
+    );
+
+    // Step 2: Database transaction with cleanup on failure
+    try {
+      const submission = await this.prisma.$transaction(async (tx) => {
+        const sub = await tx.submission.create({
+          data: {
+            id: submissionId,
+            exerciseId: dto.exerciseId,
+            userId,
+            fileName: file.originalname.trim(),
+            fileUrl: objectPath, // Store Supabase object path
+            note: dto.note ? dto.note.trim() : null,
+            status: SubmissionStatus.PENDING,
+          },
+          include: {
+            exercise: {
+              select: { id: true, title: true, studyDayId: true },
+            },
+          },
+        });
+
+        // Ensure student progress for this study day is at least IN_PROGRESS
+        await tx.progress.upsert({
+          where: {
+            userId_studyDayId: {
+              userId,
+              studyDayId: exercise.studyDayId,
+            },
+          },
+          update: {
+            status: ProgressStatus.COMPLETED
+              ? undefined
+              : ProgressStatus.IN_PROGRESS,
+          },
+          create: {
             userId,
             studyDayId: exercise.studyDayId,
+            status: ProgressStatus.IN_PROGRESS,
           },
-        },
-        update: {
-          status: ProgressStatus.COMPLETED
-            ? undefined
-            : ProgressStatus.IN_PROGRESS,
-        },
-        create: {
-          userId,
-          studyDayId: exercise.studyDayId,
-          status: ProgressStatus.IN_PROGRESS,
-        },
+        });
+
+        // Log activity
+        await tx.activity.create({
+          data: {
+            userId,
+            type: ActivityType.SUBMITTED_EXERCISE,
+            message: `${user?.name || 'Student'} submitted solution for "${exercise.title}"`,
+          },
+        });
+
+        return sub;
       });
 
-      // Log activity
-      await tx.activity.create({
-        data: {
-          userId,
-          type: ActivityType.SUBMITTED_EXERCISE,
-          message: `${user?.name || 'Student'} submitted solution for "${exercise.title}"`,
-        },
-      });
-
-      return sub;
-    });
-
-    return submission;
+      return this.attachSignedUrl(submission);
+    } catch (err) {
+      this.logger.error(
+        `Database transaction failed after storage upload. Cleaning up object "${objectPath}"...`,
+      );
+      // Cleanup orphan storage object if DB record creation failed
+      await this.storageService
+        .deleteFile(objectPath)
+        .catch((delErr: unknown) => {
+          this.logger.error(
+            `Failed to cleanup orphan object "${objectPath}": ${(delErr as Error).message}`,
+          );
+        });
+      throw err;
+    }
   }
 
   async findMySubmissions(userId: string) {
-    return this.prisma.submission.findMany({
+    const submissions = await this.prisma.submission.findMany({
       where: { userId },
       orderBy: { submittedAt: 'desc' },
       include: {
@@ -103,6 +247,8 @@ export class SubmissionsService {
         },
       },
     });
+
+    return Promise.all(submissions.map((sub) => this.attachSignedUrl(sub)));
   }
 
   async findOne(id: string, userId: string, role: Role) {
@@ -130,11 +276,11 @@ export class SubmissionsService {
       );
     }
 
-    return submission;
+    return this.attachSignedUrl(submission);
   }
 
   async findAllForAdmin(status?: SubmissionStatus) {
-    return this.prisma.submission.findMany({
+    const submissions = await this.prisma.submission.findMany({
       where: {
         ...(status && { status }),
       },
@@ -155,6 +301,8 @@ export class SubmissionsService {
         },
       },
     });
+
+    return Promise.all(submissions.map((sub) => this.attachSignedUrl(sub)));
   }
 
   async reviewSubmission(id: string, dto: ReviewSubmissionDto) {
@@ -255,6 +403,6 @@ export class SubmissionsService {
       return reviewed;
     });
 
-    return updatedSubmission;
+    return this.attachSignedUrl(updatedSubmission);
   }
 }

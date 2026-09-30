@@ -7,8 +7,12 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
-import { SubmissionsService } from './submissions.service';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { SubmissionsService, MulterFile } from './submissions.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { ReviewSubmissionDto } from './dto/review-submission.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -23,11 +27,18 @@ export class SubmissionsController {
   constructor(private readonly submissionsService: SubmissionsService) {}
 
   @Post('submissions')
+  @UseInterceptors(FileInterceptor('file'))
   async submit(
     @CurrentUser('sub') userId: string,
+    @UploadedFile() file: MulterFile,
     @Body() dto: CreateSubmissionDto,
   ) {
-    return this.submissionsService.submit(userId, dto);
+    if (!file) {
+      throw new BadRequestException(
+        'A solution file is required in multipart/form-data ("file" field)',
+      );
+    }
+    return this.submissionsService.submit(userId, file, dto);
   }
 
   @Get('submissions/me')

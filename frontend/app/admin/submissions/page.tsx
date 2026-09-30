@@ -245,7 +245,7 @@ export default function AdminSubmissionsPage() {
                 </div>
                 {selectedSubmission.fileUrl && (
                   <a
-                    href={selectedSubmission.fileUrl}
+                    href={selectedSubmission.signedUrl || selectedSubmission.fileUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"

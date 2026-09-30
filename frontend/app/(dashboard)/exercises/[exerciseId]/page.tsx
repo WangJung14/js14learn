@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, use } from 'react';
+import React, { useEffect, useState, use, useCallback } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Code2, Upload, FileCode, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { exercisesApi, submissionsApi } from '@/lib/api';
@@ -23,11 +23,10 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
   const [success, setSuccess] = useState<string | null>(null);
 
   // Form State
-  const [fileName, setFileName] = useState('');
-  const [fileUrl, setFileUrl] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [note, setNote] = useState('');
 
-  const loadExerciseData = async () => {
+  const loadExerciseData = useCallback(async () => {
     try {
       const [exData, mySubs] = await Promise.all([
         exercisesApi.getById(exerciseId),
@@ -35,24 +34,37 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
       ]);
       setExercise(exData);
       setSubmissions(mySubs.filter((s) => s.exerciseId === exerciseId));
-    } catch (err: any) {
-      setError(err.message || 'Failed to load exercise details.');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to load exercise details.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [exerciseId]);
 
   useEffect(() => {
-    loadExerciseData();
-  }, [exerciseId]);
+    void loadExerciseData();
+  }, [loadExerciseData]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Selected file size exceeds maximum limit of 10 MB.');
+        setSelectedFile(null);
+        return;
+      }
+      setError(null);
+      setSelectedFile(file);
+    }
+  };
 
   const handleSubmitSolution = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
-    if (!fileName || !fileUrl) {
-      setError('File name and solution URL are required.');
+    if (!selectedFile) {
+      setError('Please select a solution file to upload.');
       return;
     }
 
@@ -60,14 +72,12 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
     try {
       await submissionsApi.submit({
         exerciseId,
-        fileName: fileName.trim(),
-        fileUrl: fileUrl.trim(),
+        file: selectedFile,
         note: note.trim() || undefined,
       });
 
-      setSuccess('Solution uploaded successfully! Awaiting admin review.');
-      setFileName('');
-      setFileUrl('');
+      setSuccess('Solution uploaded successfully to Supabase Storage! Awaiting admin review.');
+      setSelectedFile(null);
       setNote('');
       await loadExerciseData();
     } catch (err: any) {
@@ -147,23 +157,23 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
             )}
 
             <form onSubmit={handleSubmitSolution} className="space-y-4">
-              <Input
-                id="fileName"
-                label="File Name"
-                placeholder="solution.js (allowed: .js, .ts, .zip, .pdf, .png)"
-                value={fileName}
-                onChange={(e) => setFileName(e.target.value)}
-                required
-              />
-
-              <Input
-                id="fileUrl"
-                label="Solution Public URL / Repository Link"
-                placeholder="https://github.com/user/repo/solution.js"
-                value={fileUrl}
-                onChange={(e) => setFileUrl(e.target.value)}
-                required
-              />
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300 block">
+                  Select Solution File <span className="text-slate-500">(Max 10MB: .js, .ts, .zip, .pdf, .png)</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".js,.ts,.zip,.pdf,.png"
+                  onChange={handleFileChange}
+                  required
+                  className="w-full text-xs text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer bg-slate-950 border border-slate-800 rounded-lg p-2"
+                />
+                {selectedFile && (
+                  <p className="text-[11px] text-indigo-400 font-mono">
+                    Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
 
               <Textarea
                 id="note"
@@ -175,7 +185,7 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
               />
 
               <Button type="submit" isLoading={submitting} className="w-full">
-                <Upload className="w-4 h-4 mr-2" /> Submit Solution
+                <Upload className="w-4 h-4 mr-2" /> Upload & Submit Solution
               </Button>
             </form>
           </CardContent>

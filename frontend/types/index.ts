@@ -102,6 +102,7 @@ export interface Submission {
   userId: string;
   fileName: string;
   fileUrl: string;
+  signedUrl?: string;
   note?: string | null;
   adminNote?: string | null;
   status: SubmissionStatus;

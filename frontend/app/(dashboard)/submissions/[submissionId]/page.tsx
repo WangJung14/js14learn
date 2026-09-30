@@ -90,7 +90,7 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ sub
             <CardTitle className="text-lg">Submission File Payload</CardTitle>
           </div>
           <a
-            href={submission.fileUrl}
+            href={submission.signedUrl || submission.fileUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center space-x-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"

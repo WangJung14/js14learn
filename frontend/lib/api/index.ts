@@ -12,6 +12,10 @@ import {
   DashboardData,
   SubmissionStatus,
   Role,
+  StudyDayChecklistData,
+  TodayAttendanceData,
+  Attendance,
+  AttendanceStatsData,
 } from '../../types';
 
 export * from './client';
@@ -167,6 +171,7 @@ export const exercisesApi = {
     });
   },
 };
+
 export const submissionsApi = {
   async submit(data: {
     exerciseId: string;
@@ -247,6 +252,50 @@ export const activityApi = {
 
   async getMyActivity(): Promise<Activity[]> {
     return apiClient<Activity[]>('/activity/me');
+  },
+};
+
+export const checklistsApi = {
+  async getTodayChecklist(): Promise<StudyDayChecklistData> {
+    return apiClient<StudyDayChecklistData>('/checklists/today');
+  },
+
+  async getStudyDayChecklist(studyDayId: string): Promise<StudyDayChecklistData> {
+    return apiClient<StudyDayChecklistData>(`/checklists/study-day/${studyDayId}`);
+  },
+
+  async completeItem(id: string): Promise<StudyDayChecklistData> {
+    return apiClient<StudyDayChecklistData>(`/checklists/${id}/complete`, {
+      method: 'POST',
+    });
+  },
+
+  async uncompleteItem(id: string): Promise<StudyDayChecklistData> {
+    return apiClient<StudyDayChecklistData>(`/checklists/${id}/complete`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+export const attendanceApi = {
+  async getTodayAttendance(): Promise<TodayAttendanceData> {
+    return apiClient<TodayAttendanceData>('/attendance/today');
+  },
+
+  async checkIn(): Promise<Attendance> {
+    return apiClient<Attendance>('/attendance/check-in', {
+      method: 'POST',
+    });
+  },
+
+  async checkOut(): Promise<Attendance> {
+    return apiClient<Attendance>('/attendance/check-out', {
+      method: 'POST',
+    });
+  },
+
+  async getStats(): Promise<AttendanceStatsData> {
+    return apiClient<AttendanceStatsData>('/attendance/stats');
   },
 };
 

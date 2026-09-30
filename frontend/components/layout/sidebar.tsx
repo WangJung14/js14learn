@@ -13,6 +13,7 @@ import {
   LogOut,
   Code2,
   FileCheck,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,6 +31,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Study Roadmap', href: '/roadmap', icon: Map },
+    { name: 'Attendance', href: '/attendance', icon: Clock },
     { name: 'Study Group', href: '/group', icon: Users },
     { name: 'Activity Feed', href: '/activity', icon: Activity },
     { name: 'My Profile', href: '/profile', icon: User },

@@ -47,7 +47,7 @@ export default function AdminUsersPage() {
   }, []);
 
   useEffect(() => {
-    fetchUsers();
+    void fetchUsers();
   }, [fetchUsers]);
 
   const handleOpenRoleModal = (user: User) => {

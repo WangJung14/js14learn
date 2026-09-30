@@ -278,6 +278,192 @@ async function runQA() {
       activityMeRes.status === 200 && Array.isArray(activityMeRes.data),
     );
 
+    // ==========================================
+    // CHECKLIST & ATTENDANCE PHASE 3 TESTS
+    // ==========================================
+
+    // 26. GET /api/checklists/today
+    const todayChecklistRes = await request('/checklists/today', 'GET', null, studentToken);
+    assert(
+      '26. GET /api/checklists/today returns today study day checklist with items & summary',
+      todayChecklistRes.status === 200 &&
+        Boolean(todayChecklistRes.data?.summary) &&
+        Array.isArray(todayChecklistRes.data?.items) &&
+        todayChecklistRes.data.items.length > 0,
+      JSON.stringify(todayChecklistRes.data),
+    );
+    const lessonItem = todayChecklistRes.data.items.find((i) => i.type === 'LESSON');
+    const exerciseItem = todayChecklistRes.data.items.find((i) => i.type === 'EXERCISE');
+
+    // 27. GET /api/checklists/study-day/:studyDayId
+    const dayChecklistRes = await request(`/checklists/study-day/${firstDay.id}`, 'GET', null, studentToken);
+    assert(
+      '27. GET /api/checklists/study-day/:id returns checklist for specific study day',
+      dayChecklistRes.status === 200 && Array.isArray(dayChecklistRes.data?.items),
+    );
+
+    // 28. POST /api/checklists/:id/complete (Manual Item)
+    const completeLessonRes = await request(`/checklists/${lessonItem.id}/complete`, 'POST', null, studentToken);
+    assert(
+      '28. POST /api/checklists/:id/complete marks LESSON item completed',
+      completeLessonRes.status === 200 || completeLessonRes.status === 201,
+    );
+
+    // 29. Duplicate completion is idempotent
+    const duplicateCompleteRes = await request(`/checklists/${lessonItem.id}/complete`, 'POST', null, studentToken);
+    assert(
+      '29. Duplicate POST /api/checklists/:id/complete is idempotent',
+      duplicateCompleteRes.status === 200 || duplicateCompleteRes.status === 201,
+    );
+
+    // 30. DELETE /api/checklists/:id/complete (Uncomplete Manual Item)
+    const uncompleteLessonRes = await request(`/checklists/${lessonItem.id}/complete`, 'DELETE', null, studentToken);
+    assert(
+      '30. DELETE /api/checklists/:id/complete unmarks LESSON item',
+      uncompleteLessonRes.status === 200,
+    );
+
+    // 31. Attempting manual completion of unapproved EXERCISE item fails
+    if (exerciseItem) {
+      const manualExFail = await request(`/checklists/${exerciseItem.id}/complete`, 'POST', null, studentToken);
+      assert(
+        '31. Completing unapproved EXERCISE checklist item manually fails with 400 Bad Request',
+        manualExFail.status === 400,
+        JSON.stringify(manualExFail.data),
+      );
+    }
+
+    // 32. Admin Create Checklist Item POST /api/admin/checklists
+    const adminCreateItemRes = await request('/admin/checklists', 'POST', {
+      studyDayId: firstDay.id,
+      title: 'QA Admin Created Task',
+      type: 'CUSTOM',
+      order: 99,
+      isRequired: false,
+    }, adminToken);
+    assert(
+      '32. POST /api/admin/checklists creates new checklist item (Admin)',
+      (adminCreateItemRes.status === 200 || adminCreateItemRes.status === 201) && adminCreateItemRes.data?.id,
+    );
+    const createdItemId = adminCreateItemRes.data?.id;
+
+    // 33. Admin Update Checklist Item PATCH /api/admin/checklists/:id
+    const adminUpdateItemRes = await request(`/admin/checklists/${createdItemId}`, 'PATCH', {
+      title: 'QA Admin Updated Task Title',
+    }, adminToken);
+    assert(
+      '33. PATCH /api/admin/checklists/:id updates item title (Admin)',
+      adminUpdateItemRes.status === 200 && adminUpdateItemRes.data?.title === 'QA Admin Updated Task Title',
+    );
+
+    // 34. Admin Reorder Checklist Items PATCH /api/admin/checklists/reorder
+    const adminReorderRes = await request('/admin/checklists/reorder', 'PATCH', {
+      items: [{ id: createdItemId, order: 100 }],
+    }, adminToken);
+    assert(
+      '34. PATCH /api/admin/checklists/reorder updates item orders (Admin)',
+      adminReorderRes.status === 200,
+    );
+
+    // 35. Admin Delete Checklist Item DELETE /api/admin/checklists/:id
+    const adminDeleteItemRes = await request(`/admin/checklists/${createdItemId}`, 'DELETE', null, adminToken);
+    assert(
+      '35. DELETE /api/admin/checklists/:id deletes checklist item (Admin)',
+      adminDeleteItemRes.status === 200,
+    );
+
+    // 36 & 37. Auto-completion for Linked Exercise Checklist Items upon Admin Approval
+    const sampleEx2Buffer = Buffer.from('function solution2() { return "Day 1 Solution 2"; }', 'utf-8');
+    const sub2Res = await uploadFileMultipart(
+      '/submissions',
+      targetExercise.id,
+      'solution_day1_ex2.js',
+      sampleEx2Buffer,
+      'application/javascript',
+      studentToken,
+      'Submission for checklist auto-completion test',
+    );
+    const sub2Id = sub2Res.data?.id;
+
+    // Verify PENDING submission did NOT complete exercise checklist item
+    const checklistPendingCheck = await request('/checklists/today', 'GET', null, studentToken);
+    const exItemBeforeApproval = checklistPendingCheck.data?.items?.find((i) => i.exerciseId === targetExercise.id);
+    assert(
+      '36. PENDING exercise submission does NOT auto-complete linked checklist item',
+      exItemBeforeApproval ? !exItemBeforeApproval.isCompleted : true,
+    );
+
+    // Admin Approves Submission
+    await request(`/admin/submissions/${sub2Id}/review`, 'PATCH', {
+      status: 'APPROVED',
+      adminNote: 'Approved for checklist auto-completion test',
+    }, adminToken);
+
+    // Verify APPROVED submission automatically completed linked checklist item
+    const checklistApprovedCheck = await request('/checklists/today', 'GET', null, studentToken);
+    const exItemAfterApproval = checklistApprovedCheck.data?.items?.find((i) => i.exerciseId === targetExercise.id);
+    assert(
+      '37. APPROVED exercise submission automatically creates ChecklistCompletion for linked item',
+      exItemAfterApproval ? exItemAfterApproval.isCompleted === true : true,
+    );
+
+    // Use freshly registered student token for attendance check-in/check-out lifecycle tests
+    const qaStudentToken = regRes.data?.tokens?.accessToken;
+
+    // 38. GET /api/attendance/today before check-in
+    const attTodayBefore = await request('/attendance/today', 'GET', null, qaStudentToken);
+    assert(
+      '38. GET /api/attendance/today returns attendance status object',
+      attTodayBefore.status === 200 && attTodayBefore.data?.isCheckedIn === false,
+    );
+
+    // 39. POST /api/attendance/check-in
+    const checkInRes = await request('/attendance/check-in', 'POST', null, qaStudentToken);
+    assert(
+      '39. POST /api/attendance/check-in creates today attendance record',
+      (checkInRes.status === 200 || checkInRes.status === 201) && Boolean(checkInRes.data?.checkedInAt),
+    );
+
+    // 40. Duplicate POST /api/attendance/check-in returns existing record
+    const dupCheckInRes = await request('/attendance/check-in', 'POST', null, qaStudentToken);
+    assert(
+      '40. Duplicate POST /api/attendance/check-in is idempotent and returns existing attendance',
+      dupCheckInRes.status === 200 || dupCheckInRes.status === 201,
+    );
+
+    // 41. POST /api/attendance/check-out
+    const checkOutRes = await request('/attendance/check-out', 'POST', null, qaStudentToken);
+    assert(
+      '41. POST /api/attendance/check-out sets checkedOutAt and computes durationMinutes',
+      (checkOutRes.status === 200 || checkOutRes.status === 201) &&
+        Boolean(checkOutRes.data?.checkedOutAt) &&
+        checkOutRes.data?.durationMinutes >= 1,
+      JSON.stringify(checkOutRes.data),
+    );
+
+    // 42. Duplicate POST /api/attendance/check-out fails
+    const dupCheckOutRes = await request('/attendance/check-out', 'POST', null, qaStudentToken);
+    assert(
+      '42. Duplicate POST /api/attendance/check-out fails with 400 Bad Request',
+      dupCheckOutRes.status === 400,
+    );
+
+    // 43. GET /api/attendance/stats
+    const attStatsRes = await request('/attendance/stats', 'GET', null, qaStudentToken);
+    assert(
+      '43. GET /api/attendance/stats returns streak counts, total study days, and recent records',
+      attStatsRes.status === 200 && attStatsRes.data?.statistics?.totalAttendanceDays >= 1,
+    );
+
+    // 44. Dashboard Service extension check
+    const extendedDashboard = await request('/dashboard', 'GET', null, studentToken);
+    assert(
+      '44. GET /api/dashboard contains todayChecklist and todayAttendance fields',
+      extendedDashboard.status === 200 &&
+        Boolean(extendedDashboard.data?.todayChecklist) &&
+        Boolean(extendedDashboard.data?.todayAttendance),
+    );
+
     // Summary
     console.log('\n=== INTEGRATION QA SUMMARY ===');
     const passed = results.filter((r) => r.pass).length;

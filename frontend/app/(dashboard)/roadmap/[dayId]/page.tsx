@@ -3,12 +3,13 @@
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, BookOpen, Code2, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
-import { studyDaysApi } from '@/lib/api';
+import { studyDaysApi, attendanceApi } from '@/lib/api';
 import { StudyDay } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StudyDayChecklist } from '@/components/checklists/study-day-checklist';
 
 export default function StudyDayDetailPage({ params }: { params: Promise<{ dayId: string }> }) {
   const { dayId } = use(params);
@@ -22,6 +23,8 @@ export default function StudyDayDetailPage({ params }: { params: Promise<{ dayId
       try {
         const result = await studyDaysApi.getById(dayId);
         setDay(result);
+        // Automatic attendance check-in for learning context
+        attendanceApi.checkIn().catch(() => {});
       } catch (err: any) {
         setError(err.message || 'Failed to load study day details.');
       } finally {
@@ -88,6 +91,9 @@ export default function StudyDayDetailPage({ params }: { params: Promise<{ dayId
           </div>
         </CardContent>
       </Card>
+
+      {/* Study Checklist Section */}
+      <StudyDayChecklist studyDayId={dayId} />
 
       {/* Exercises Section */}
       <div className="space-y-4">

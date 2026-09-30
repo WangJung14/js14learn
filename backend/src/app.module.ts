@@ -16,6 +16,8 @@ import { GroupsModule } from './groups/groups.module';
 import { ActivityModule } from './activity/activity.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { StorageModule } from './storage/storage.module';
+import { ChecklistsModule } from './checklists/checklists.module';
+import { AttendanceModule } from './attendance/attendance.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 @Module({
@@ -34,6 +36,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     ProgressModule,
     GroupsModule,
     ActivityModule,
+    ChecklistsModule,
+    AttendanceModule,
     DashboardModule,
   ],
   controllers: [AppController],

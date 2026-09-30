@@ -1,4 +1,11 @@
-import { PrismaClient, Role, ExerciseDifficulty, ProgressStatus, ActivityType } from '@prisma/client';
+import {
+  PrismaClient,
+  Role,
+  ExerciseDifficulty,
+  ProgressStatus,
+  ActivityType,
+  ChecklistItemType,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -10,6 +17,9 @@ async function main() {
   await prisma.activity.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.progress.deleteMany();
+  await prisma.checklistCompletion.deleteMany();
+  await prisma.checklistItem.deleteMany();
+  await prisma.attendance.deleteMany();
   await prisma.exercise.deleteMany();
   await prisma.studyDay.deleteMany();
   await prisma.groupMember.deleteMany();
@@ -807,6 +817,7 @@ Complete the project and pass the React Readiness Test before starting React.`,
   ];
 
   let totalExercisesCount = 0;
+  let totalChecklistItemsCount = 0;
 
   for (const dayData of studyDaysData) {
     const { exercises, ...studyDayFields } = dayData;
@@ -817,23 +828,76 @@ Complete the project and pass the React Readiness Test before starting React.`,
       },
     });
 
+    // 1. Create Lesson checklist items
+    await prisma.checklistItem.create({
+      data: {
+        studyDayId: createdDay.id,
+        title: `Read Day ${createdDay.dayNumber} lesson: ${createdDay.title}`,
+        type: ChecklistItemType.LESSON,
+        order: 1,
+        isRequired: true,
+      },
+    });
+    totalChecklistItemsCount++;
+
+    await prisma.checklistItem.create({
+      data: {
+        studyDayId: createdDay.id,
+        title: `Study core concepts and code examples`,
+        type: ChecklistItemType.LESSON,
+        order: 2,
+        isRequired: true,
+      },
+    });
+    totalChecklistItemsCount++;
+
+    // 2. Create Exercise, Project, Checkpoint checklist items linked to Exercises
     for (const ex of exercises) {
-      await prisma.exercise.create({
+      const createdEx = await prisma.exercise.create({
         data: {
           ...ex,
           studyDayId: createdDay.id,
         },
       });
       totalExercisesCount++;
+
+      let itemType: ChecklistItemType = ChecklistItemType.EXERCISE;
+      let titlePrefix = 'Complete exercise';
+      if (ex.order === 4) {
+        itemType = ChecklistItemType.PROJECT;
+        titlePrefix = 'Build mini-project';
+      } else if (ex.order === 5) {
+        itemType = ChecklistItemType.CHECKPOINT;
+        titlePrefix = 'Pass checkpoint';
+      }
+
+      await prisma.checklistItem.create({
+        data: {
+          studyDayId: createdDay.id,
+          exerciseId: createdEx.id,
+          title: `${titlePrefix}: ${createdEx.title}`,
+          type: itemType,
+          order: ex.order + 2,
+          isRequired: true,
+        },
+      });
+      totalChecklistItemsCount++;
     }
   }
 
-  console.log(`✅ Created 14 Study Days with ${totalExercisesCount} educational exercises`);
+  console.log(
+    `✅ Created 14 Study Days with ${totalExercisesCount} exercises and ${totalChecklistItemsCount} checklist items`,
+  );
 
-  // 4. Create Initial Progress Records for Students
-  const studyDays = await prisma.studyDay.findMany({ orderBy: { dayNumber: 'asc' } });
+  // 4. Create Initial Progress, Attendance, and ChecklistCompletion Records
+  const studyDays = await prisma.studyDay.findMany({
+    orderBy: { dayNumber: 'asc' },
+    include: { checklistItems: true },
+  });
   const day1 = studyDays[0];
   const day2 = studyDays[1];
+
+  const todayStr = new Date().toISOString().split('T')[0];
 
   for (const student of [tommy, alex, john]) {
     await prisma.progress.create({
@@ -853,6 +917,27 @@ Complete the project and pass the React Readiness Test before starting React.`,
       },
     });
 
+    // Seed attendance for today
+    await prisma.attendance.create({
+      data: {
+        userId: student.id,
+        date: todayStr,
+        checkedInAt: new Date(),
+        durationMinutes: 45,
+      },
+    });
+
+    // Seed checklist completions for Day 1
+    for (const item of day1.checklistItems) {
+      await prisma.checklistCompletion.create({
+        data: {
+          userId: student.id,
+          checklistItemId: item.id,
+          completedAt: new Date(),
+        },
+      });
+    }
+
     await prisma.activity.create({
       data: {
         userId: student.id,
@@ -870,7 +955,9 @@ Complete the project and pass the React Readiness Test before starting React.`,
     });
   }
 
-  console.log('✅ Created initial student Progress and Activity records');
+  console.log(
+    '✅ Created initial student Progress, Attendance, and ChecklistCompletion records',
+  );
   console.log('🎉 Database seeding completed successfully!');
 }
 

@@ -203,10 +203,11 @@ export default function DashboardPage() {
         <CardHeader className="flex flex-row items-center justify-between pb-4">
           <div className="flex items-center space-x-2">
             <ActivityIcon className="w-5 h-5 text-indigo-400" />
-            <CardTitle className="text-lg">Recent Group Activity</CardTitle>
+            <CardTitle className="text-lg font-bold">Recent Group Activity</CardTitle>
           </div>
-          <Link href="/activity" className="text-xs text-indigo-400 hover:underline font-medium">
-            View All Activity →
+          <Link href="/activity" className="text-xs text-indigo-400 hover:underline font-medium flex items-center space-x-1">
+            <span>View All Activity</span>
+            <span>→</span>
           </Link>
         </CardHeader>
 
@@ -217,17 +218,22 @@ export default function DashboardPage() {
             recentActivity.slice(0, 5).map((act) => (
               <div
                 key={act.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-slate-950/60 border border-slate-800/60 hover:border-slate-700 transition-colors"
+                className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/60 hover:border-indigo-500/30 transition-all"
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 min-w-0 flex-1">
                   <img
-                    src={act.user?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${act.user?.name || 'User'}`}
+                    src={
+                      act.user?.avatarUrl ||
+                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+                        act.user?.name || 'User',
+                      )}`
+                    }
                     alt={act.user?.name || 'User'}
-                    className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700"
+                    className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex-shrink-0"
                   />
-                  <div>
-                    <p className="text-sm font-medium text-slate-200">{act.message}</p>
-                    <p className="text-[11px] text-slate-500">{formatTimeAgo(act.createdAt)}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-200 truncate">{act.message}</p>
+                    <p className="text-[11px] text-slate-500 font-mono">{formatTimeAgo(act.createdAt)}</p>
                   </div>
                 </div>
               </div>

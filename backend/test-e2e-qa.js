@@ -260,6 +260,24 @@ async function runQA() {
     const usersList = await request('/users', 'GET', null, adminToken);
     assert('23. GET /api/users (Admin) returns all registered users', usersList.status === 200 && Array.isArray(usersList.data));
 
+    // 24. Activity API GET /api/activity (Group Feed)
+    const activityGroupRes = await request('/activity', 'GET', null, studentToken);
+    assert(
+      '24. GET /api/activity returns group activities feed with user profile',
+      activityGroupRes.status === 200 &&
+        Array.isArray(activityGroupRes.data) &&
+        activityGroupRes.data.length > 0 &&
+        Boolean(activityGroupRes.data[0].message) &&
+        Boolean(activityGroupRes.data[0].user?.name),
+    );
+
+    // 25. Activity API GET /api/activity/me (Personal Feed)
+    const activityMeRes = await request('/activity/me', 'GET', null, studentToken);
+    assert(
+      '25. GET /api/activity/me returns personal user activities feed',
+      activityMeRes.status === 200 && Array.isArray(activityMeRes.data),
+    );
+
     // Summary
     console.log('\n=== INTEGRATION QA SUMMARY ===');
     const passed = results.filter((r) => r.pass).length;

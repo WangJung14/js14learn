@@ -1,4 +1,24 @@
+# AI & Design References
 .ai/
 design/
 master_prompt.md
-node_modules
+
+# Dependencies & Build Output
+node_modules/
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

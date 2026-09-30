@@ -27,7 +27,8 @@ let HttpExceptionFilter = HttpExceptionFilter_1 = class HttpExceptionFilter {
             message = exceptionResponse;
             errorName = exception instanceof common_1.HttpException ? exception.name : 'Error';
         }
-        else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+        else if (typeof exceptionResponse === 'object' &&
+            exceptionResponse !== null) {
             if (exceptionResponse.message) {
                 message = exceptionResponse.message;
             }

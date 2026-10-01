@@ -109,6 +109,9 @@ model Exercise {
   description String
   difficulty  ExerciseDifficulty @default(EASY)
   order       Int
+  isCoding    Boolean            @default(false)
+  starterCode String?
+  codingConfig Json?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
@@ -120,16 +123,19 @@ model Exercise {
 }
 
 model Submission {
-  id          String           @id @default(uuid())
-  exerciseId  String
-  userId      String
-  fileName    String
-  fileUrl     String
-  note        String?
-  adminNote   String?
-  status      SubmissionStatus @default(PENDING)
-  submittedAt DateTime         @default(now())
-  reviewedAt  DateTime?
+  id              String           @id @default(uuid())
+  exerciseId      String
+  userId          String
+  submissionType  String           @default("FILE")
+  code            String?
+  executionResult Json?
+  fileName        String?
+  fileUrl         String?
+  note            String?
+  adminNote       String?
+  status          SubmissionStatus @default(PENDING)
+  submittedAt     DateTime         @default(now())
+  reviewedAt      DateTime?
 
   exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)

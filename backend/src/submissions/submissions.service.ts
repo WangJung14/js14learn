@@ -10,6 +10,7 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
+import { CreateCodeSubmissionDto } from './dto/create-code-submission.dto';
 import { ReviewSubmissionDto } from './dto/review-submission.dto';
 import {
   SubmissionStatus,
@@ -106,7 +107,7 @@ export class SubmissionsService {
   }
 
   private async attachSignedUrl<
-    T extends { fileUrl: string; signedUrl?: string },
+    T extends { fileUrl?: string | null; signedUrl?: string },
   >(submission: T): Promise<T & { signedUrl: string }> {
     if (!submission.fileUrl) {
       return { ...submission, signedUrl: '' };
@@ -413,5 +414,149 @@ export class SubmissionsService {
     }
 
     return this.attachSignedUrl(updatedSubmission);
+  }
+
+  async submitCode(userId: string, dto: CreateCodeSubmissionDto) {
+    if (!dto.code || dto.code.length > 20480) {
+      throw new BadRequestException(
+        'Code size exceeds maximum allowed limit of 20 KB',
+      );
+    }
+
+    const exercise = await this.prisma.exercise.findUnique({
+      where: { id: dto.exerciseId },
+      include: { studyDay: true },
+    });
+
+    if (!exercise) {
+      throw new NotFoundException(
+        `Exercise with ID ${dto.exerciseId} not found`,
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    const isAllPassed =
+      Boolean(dto.executionSummary) &&
+      dto.executionSummary.total > 0 &&
+      dto.executionSummary.passed === dto.executionSummary.total;
+
+    const submissionStatus = isAllPassed
+      ? SubmissionStatus.APPROVED
+      : SubmissionStatus.REJECTED;
+
+    const submission = await this.prisma.$transaction(async (tx) => {
+      const sub = await tx.submission.create({
+        data: {
+          exerciseId: dto.exerciseId,
+          userId,
+          submissionType: 'CODE',
+          code: dto.code,
+          executionResult: JSON.parse(JSON.stringify(dto.executionSummary)),
+          fileName: 'solution.js',
+          fileUrl: null,
+          note: dto.note ? dto.note.trim() : null,
+          status: submissionStatus,
+          reviewedAt: isAllPassed ? new Date() : null,
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          exercise: {
+            select: { id: true, title: true, studyDayId: true },
+          },
+        },
+      });
+
+      if (isAllPassed) {
+        // Check if all exercises in this StudyDay have at least one APPROVED submission by this user
+        const allExercisesInDay = await tx.exercise.findMany({
+          where: { studyDayId: exercise.studyDayId },
+          select: { id: true },
+        });
+
+        const exerciseIdsInDay = allExercisesInDay.map((e) => e.id);
+
+        const approvedSubmissions = await tx.submission.findMany({
+          where: {
+            userId,
+            exerciseId: { in: exerciseIdsInDay },
+            status: SubmissionStatus.APPROVED,
+          },
+          select: { exerciseId: true },
+        });
+
+        const approvedExerciseIds = new Set(
+          approvedSubmissions.map((s) => s.exerciseId),
+        );
+        const isDayFullyCompleted = exerciseIdsInDay.every((exId) =>
+          approvedExerciseIds.has(exId),
+        );
+
+        if (isDayFullyCompleted) {
+          await tx.progress.upsert({
+            where: {
+              userId_studyDayId: {
+                userId,
+                studyDayId: exercise.studyDayId,
+              },
+            },
+            update: {
+              status: ProgressStatus.COMPLETED,
+              completedAt: new Date(),
+            },
+            create: {
+              userId,
+              studyDayId: exercise.studyDayId,
+              status: ProgressStatus.COMPLETED,
+              completedAt: new Date(),
+            },
+          });
+
+          await tx.activity.create({
+            data: {
+              userId,
+              type: ActivityType.COMPLETED_DAY,
+              message: `${user?.name || 'Student'} completed Day ${exercise.studyDay.dayNumber}: ${exercise.studyDay.title}`,
+            },
+          });
+        } else {
+          await tx.progress.upsert({
+            where: {
+              userId_studyDayId: {
+                userId,
+                studyDayId: exercise.studyDayId,
+              },
+            },
+            update: {},
+            create: {
+              userId,
+              studyDayId: exercise.studyDayId,
+              status: ProgressStatus.IN_PROGRESS,
+            },
+          });
+        }
+
+        await tx.activity.create({
+          data: {
+            userId,
+            type: ActivityType.SUBMITTED_EXERCISE,
+            message: `${user?.name || 'Student'} completed coding exercise "${exercise.title}"`,
+          },
+        });
+      }
+
+      return sub;
+    });
+
+    if (isAllPassed) {
+      await this.checklistsService.autoCompleteLinkedExerciseItem(
+        userId,
+        dto.exerciseId,
+      );
+    }
+
+    return this.attachSignedUrl(submission);
   }
 }

@@ -190,6 +190,22 @@ export const submissionsApi = {
     });
   },
 
+  async submitCode(data: {
+    exerciseId: string;
+    code: string;
+    executionSummary: {
+      passed: number;
+      total: number;
+      durationMs: number;
+    };
+    note?: string;
+  }): Promise<Submission> {
+    return apiClient<Submission>('/submissions/code', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   async getMySubmissions(): Promise<Submission[]> {
     return apiClient<Submission[]>('/submissions/me');
   },

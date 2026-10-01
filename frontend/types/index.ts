@@ -85,6 +85,23 @@ export interface StudyDay {
   exercises?: Exercise[];
 }
 
+export interface CodingTestCase {
+  id: string;
+  name: string;
+  args?: unknown[];
+  expected?: unknown;
+  expectedOutput?: string;
+  hidden?: boolean;
+}
+
+export interface CodingExerciseConfig {
+  language: 'javascript';
+  mode?: 'console' | 'function';
+  functionName?: string;
+  starterCode?: string;
+  tests: CodingTestCase[];
+}
+
 export interface Exercise {
   id: string;
   studyDayId: string;
@@ -92,6 +109,9 @@ export interface Exercise {
   description: string;
   difficulty: ExerciseDifficulty;
   order: number;
+  isCoding?: boolean;
+  starterCode?: string | null;
+  codingConfig?: CodingExerciseConfig | unknown;
   createdAt: string;
   updatedAt: string;
   studyDay?: {
@@ -107,8 +127,11 @@ export interface Submission {
   id: string;
   exerciseId: string;
   userId: string;
-  fileName: string;
-  fileUrl: string;
+  submissionType?: 'FILE' | 'CODE';
+  code?: string | null;
+  executionResult?: unknown;
+  fileName?: string | null;
+  fileUrl?: string | null;
   signedUrl?: string;
   note?: string | null;
   adminNote?: string | null;

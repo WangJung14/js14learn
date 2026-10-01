@@ -1,4 +1,11 @@
-import { IsEnum, IsInt, IsOptional, IsString, IsBoolean, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsBoolean,
+  Min,
+} from 'class-validator';
 import { ExerciseDifficulty } from '@prisma/client';
 
 export class UpdateExerciseDto {

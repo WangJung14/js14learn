@@ -23,6 +23,7 @@ export interface TestResult {
   expected?: unknown;
   error?: string;
   durationMs: number;
+  hidden?: boolean;
 }
 
 export interface ExecutionResult {

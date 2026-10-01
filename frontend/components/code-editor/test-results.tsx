@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CheckCircle2, XCircle, FlaskConical, HelpCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, FlaskConical } from 'lucide-react';
 import { TestResult } from '@/lib/code-runner/types';
 
 interface TestResultsProps {
@@ -53,51 +53,63 @@ export const TestResults: React.FC<TestResultsProps> = ({ tests, isTesting }) =>
 
       {/* Test Item List */}
       <div className="p-3 space-y-2.5 max-h-72 overflow-y-auto">
-        {tests.map((test, idx) => (
-          <div
-            key={test.id || idx}
-            className={`p-3 rounded-lg border transition-colors ${
-              test.passed
-                ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
-                : 'bg-rose-950/20 border-rose-500/30 text-rose-300'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                {test.passed ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                )}
-                <span className="font-bold text-slate-200">{test.name}</span>
+        {tests.map((test, idx) => {
+          const displayName = test.hidden ? `Hidden Test Case #${idx + 1}` : test.name;
+          return (
+            <div
+              key={test.id || idx}
+              className={`p-3 rounded-lg border transition-colors ${
+                test.passed
+                  ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-950/20 border-rose-500/30 text-rose-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  {test.passed ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                  )}
+                  <span className="font-bold text-slate-200">{displayName}</span>
+                  {test.hidden && (
+                    <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 font-sans">
+                      Hidden
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-400">{test.durationMs}ms</span>
               </div>
-              <span className="text-[10px] text-slate-400">{test.durationMs}ms</span>
-            </div>
 
-            {!test.passed && (
-              <div className="mt-2 pt-2 border-t border-slate-800/80 text-[11px] space-y-1 text-slate-300">
-                {test.error ? (
-                  <p className="text-rose-400">Error: {test.error}</p>
-                ) : (
-                  <>
-                    <div>
-                      <span className="text-slate-500">Expected: </span>
-                      <span className="text-emerald-400 font-semibold">
-                        {JSON.stringify(test.expected)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Got: </span>
-                      <span className="text-rose-400 font-semibold">
-                        {JSON.stringify(test.actual)}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+              {!test.passed && (
+                <div className="mt-2 pt-2 border-t border-slate-800/80 text-[11px] space-y-1 text-slate-300">
+                  {test.hidden ? (
+                    <p className="text-amber-400 font-sans italic">
+                      Hidden test case failed. Check your logic for edge cases.
+                    </p>
+                  ) : test.error ? (
+                    <p className="text-rose-400">Error: {test.error}</p>
+                  ) : (
+                    <>
+                      <div>
+                        <span className="text-slate-500">Expected: </span>
+                        <span className="text-emerald-400 font-semibold">
+                          {JSON.stringify(test.expected)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Got: </span>
+                        <span className="text-rose-400 font-semibold">
+                          {JSON.stringify(test.actual)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

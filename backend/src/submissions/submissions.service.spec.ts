@@ -95,7 +95,9 @@ describe('SubmissionsService - Code Submissions', () => {
     prismaService.exercise.findUnique.mockResolvedValue(mockExercise);
     prismaService.user.findUnique.mockResolvedValue(mockUser);
     prismaService.exercise.findMany.mockResolvedValue([{ id: 'ex-1' }]);
-    prismaService.submission.findMany.mockResolvedValue([{ exerciseId: 'ex-1' }]);
+    prismaService.submission.findMany.mockResolvedValue([
+      { exerciseId: 'ex-1' },
+    ]);
 
     const mockCreatedSub = {
       id: 'sub-1',
@@ -117,9 +119,8 @@ describe('SubmissionsService - Code Submissions', () => {
     });
 
     expect(result.status).toBe(SubmissionStatus.APPROVED);
-    expect(checklistsService.autoCompleteLinkedExerciseItem).toHaveBeenCalledWith(
-      'user-1',
-      'ex-1',
-    );
+    expect(
+      checklistsService.autoCompleteLinkedExerciseItem,
+    ).toHaveBeenCalledWith('user-1', 'ex-1');
   });
 });

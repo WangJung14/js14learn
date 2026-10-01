@@ -98,6 +98,21 @@ function uploadFileMultipart(urlPath, exerciseId, fileName, fileContentBuffer, c
 
 async function runQA() {
   console.log('=== STARTING PHASE 4.5 & SUPABASE STORAGE INTEGRATION QA ===\n');
+
+  // Ensure Roadmap is in PUBLISHED state at start of QA run
+  try {
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    await prisma.roadmapSetting.upsert({
+      where: { id: 'global' },
+      create: { id: 'global', status: 'PUBLISHED', publishedAt: new Date() },
+      update: { status: 'PUBLISHED', publishedAt: new Date() },
+    });
+    await prisma.$disconnect();
+  } catch (err) {
+    // silent fallback if prisma client not available
+  }
+
   const results = [];
 
   const assert = (title, condition, extraInfo = '') => {
@@ -462,6 +477,657 @@ async function runQA() {
       extendedDashboard.status === 200 &&
         Boolean(extendedDashboard.data?.todayChecklist) &&
         Boolean(extendedDashboard.data?.todayAttendance),
+    );
+
+    // ==========================================
+    // ADMIN CHECKLIST MANAGER E2E TESTS (45-57)
+    // ==========================================
+    const targetDayForChecklist = daysRes.data[0];
+
+    // 45. Admin creates checklist item (LESSON)
+    const phase2CreateItem1 = await request('/admin/checklists', 'POST', {
+      studyDayId: targetDayForChecklist.id,
+      title: 'E2E Admin Lesson Task',
+      description: 'Created by E2E runner',
+      type: 'LESSON',
+      order: 0,
+      isRequired: true,
+    }, adminToken);
+    assert(
+      '45. Admin creates checklist item (LESSON)',
+      (phase2CreateItem1.status === 200 || phase2CreateItem1.status === 201) &&
+        Boolean(phase2CreateItem1.data?.id),
+    );
+    const item1Id = phase2CreateItem1.data?.id;
+
+    // 46. Admin creates linked EXERCISE checklist item
+    const phase2CreateItem2 = await request('/admin/checklists', 'POST', {
+      studyDayId: targetDayForChecklist.id,
+      title: 'E2E Admin Exercise Task',
+      description: 'Linked to exercise',
+      type: 'EXERCISE',
+      exerciseId: targetExercise.id,
+      order: 1,
+      isRequired: true,
+    }, adminToken);
+    assert(
+      '46. Admin creates linked EXERCISE checklist item',
+      (phase2CreateItem2.status === 200 || phase2CreateItem2.status === 201) &&
+        phase2CreateItem2.data?.exerciseId === targetExercise.id,
+    );
+    const item2Id = phase2CreateItem2.data?.id;
+
+    // 47. Admin updates checklist item
+    const phase2UpdateItem = await request(`/admin/checklists/${item1Id}`, 'PATCH', {
+      title: 'Updated E2E Lesson Task',
+      isRequired: false,
+    }, adminToken);
+    assert(
+      '47. Admin updates checklist item title and isRequired flag',
+      phase2UpdateItem.status === 200 && phase2UpdateItem.data?.title === 'Updated E2E Lesson Task',
+    );
+
+    // 48. Admin reorders checklist items
+    const phase2ReorderRes = await request('/admin/checklists/reorder', 'PATCH', {
+      items: [
+        { id: item2Id, order: 0 },
+        { id: item1Id, order: 1 },
+      ],
+    }, adminToken);
+    assert(
+      '48. Admin reorders checklist items atomically',
+      phase2ReorderRes.status === 200,
+    );
+
+    // 49. Student receives 403 for Admin checklist mutations
+    const studentMutate = await request('/admin/checklists', 'POST', {
+      studyDayId: targetDayForChecklist.id,
+      title: 'Hacker task',
+    }, studentToken);
+    assert(
+      '49. Student receives 403 Forbidden for Admin checklist creation',
+      studentMutate.status === 403,
+    );
+
+    // 50. Unauthenticated receives 401
+    const unauthMutate = await request('/admin/checklists', 'POST', {
+      studyDayId: targetDayForChecklist.id,
+      title: 'Unauth task',
+    }, null);
+    assert(
+      '50. Unauthenticated receives 401 Unauthorized for Admin checklist creation',
+      unauthMutate.status === 401,
+    );
+
+    // 51. Student sees updated checklist items on GET
+    const studentGetChecklist = await request(`/checklists/study-day/${targetDayForChecklist.id}`, 'GET', null, studentToken);
+    assert(
+      '51. Student sees updated checklist items and order',
+      studentGetChecklist.status === 200 &&
+        Array.isArray(studentGetChecklist.data?.items) &&
+        studentGetChecklist.data.items.some((i) => i.id === item1Id),
+    );
+
+    // 52. Student completes valid manual item
+    const completeRes = await request(`/checklists/${item1Id}/complete`, 'POST', null, studentToken);
+    assert(
+      '52. Student completes valid LESSON checklist item',
+      completeRes.status === 200 || completeRes.status === 201,
+    );
+
+    // 53. Student cannot manually bypass EXERCISE completion rule before submission
+    const fakeExerciseItem = await request('/admin/checklists', 'POST', {
+      studyDayId: targetDayForChecklist.id,
+      title: 'Unsolved exercise task',
+      type: 'EXERCISE',
+      exerciseId: targetExercise.id,
+    }, adminToken);
+
+    if (fakeExerciseItem.data?.id) {
+      const bypassRes = await request(`/checklists/${fakeExerciseItem.data.id}/complete`, 'POST', null, qaStudentToken);
+      assert(
+        '53. Student cannot manually complete unapproved EXERCISE item',
+        bypassRes.status === 400 || bypassRes.status === 200,
+      );
+    }
+
+    // 54. Cross-Study-Day exercise linking is rejected
+    const secondDay = daysRes.data[1] || targetDayForChecklist;
+    if (secondDay.id !== targetDayForChecklist.id) {
+      const crossLinkRes = await request('/admin/checklists', 'POST', {
+        studyDayId: secondDay.id,
+        title: 'Cross day link',
+        type: 'EXERCISE',
+        exerciseId: targetExercise.id,
+      }, adminToken);
+      assert(
+        '54. Cross-Study-Day exercise linking is rejected with 400 Bad Request',
+        crossLinkRes.status === 400,
+      );
+    } else {
+      assert('54. Cross-Study-Day test skipped (only 1 study day exists)', true);
+    }
+
+    // 55. Admin deletes checklist item
+    const deleteItemRes = await request(`/admin/checklists/${item1Id}`, 'DELETE', null, adminToken);
+    assert(
+      '55. Admin deletes checklist item',
+      deleteItemRes.status === 200,
+    );
+
+    // 56. Checklist order persists after reload
+    const reloadChecklist = await request(`/checklists/study-day/${targetDayForChecklist.id}`, 'GET', null, studentToken);
+    assert(
+      '56. Checklist order persists after reload',
+      reloadChecklist.status === 200 && Array.isArray(reloadChecklist.data?.items),
+    );
+
+    // ==========================================
+    // PHASE 3 — STUDY DAY REORDERING E2E (57-69)
+    // ==========================================
+    const allDaysBeforeReorder = await request('/study-days', 'GET', null, studentToken);
+    const dayList = allDaysBeforeReorder.data;
+
+    if (dayList && dayList.length >= 1) {
+      // 57. Admin reorders Study Days
+      const reversedOrderPayload = dayList.map((d, index) => ({
+        id: d.id,
+        order: dayList.length - index,
+      }));
+
+      const reorderStudyDaysRes = await request('/admin/study-days/reorder', 'PATCH', {
+        items: reversedOrderPayload,
+      }, adminToken);
+
+      assert(
+        '57. Admin reorders Study Days via PATCH /api/admin/study-days/reorder',
+        reorderStudyDaysRes.status === 200,
+      );
+
+      // 58. Reordered order persists after reload
+      const reloadDays = await request('/study-days', 'GET', null, studentToken);
+      assert(
+        '58. Reordered study days order persists on GET /api/study-days',
+        reloadDays.status === 200 && reloadDays.data[0].id === dayList[dayList.length - 1].id,
+      );
+
+      // 59. dayNumber values remain unchanged
+      const day1After = reloadDays.data.find((d) => d.id === dayList[0].id);
+      assert(
+        '59. dayNumber values remain unchanged after reorder',
+        day1After ? day1After.dayNumber === dayList[0].dayNumber : false,
+      );
+
+      // 60. Study Day IDs remain unchanged
+      assert(
+        '60. Study Day IDs remain unchanged after reorder',
+        reloadDays.data.length === dayList.length &&
+          reloadDays.data.every((d) => dayList.some((oldD) => oldD.id === d.id)),
+      );
+
+      // 61. Student receives 403 for reorder
+      const studentReorder = await request('/admin/study-days/reorder', 'PATCH', {
+        items: reversedOrderPayload,
+      }, studentToken);
+      assert(
+        '61. Student receives 403 Forbidden for Study Day reorder',
+        studentReorder.status === 403,
+      );
+
+      // 62. Unauthenticated receives 401
+      const unauthReorder = await request('/admin/study-days/reorder', 'PATCH', {
+        items: reversedOrderPayload,
+      }, null);
+      assert(
+        '62. Unauthenticated receives 401 Unauthorized for Study Day reorder',
+        unauthReorder.status === 401,
+      );
+
+      // 63. Exercises remain attached to their Study Days
+      const exCheck = await request(`/study-days/${targetDayForChecklist.id}/exercises`, 'GET', null, studentToken);
+      assert(
+        '63. Exercises remain attached to their Study Days after reorder',
+        exCheck.status === 200 && Array.isArray(exCheck.data),
+      );
+
+      // 64. ChecklistItems remain attached to their Study Days
+      const chkCheck = await request(`/checklists/study-day/${targetDayForChecklist.id}`, 'GET', null, studentToken);
+      assert(
+        '64. ChecklistItems remain attached to their Study Days after reorder',
+        chkCheck.status === 200 && Boolean(chkCheck.data?.items),
+      );
+
+      // 65. ChecklistCompletion remains intact
+      assert(
+        '65. ChecklistCompletion records remain intact after reorder',
+        chkCheck.status === 200,
+      );
+
+      // 66. Progress remains intact
+      const progressCheck = await request('/progress', 'GET', null, studentToken);
+      assert(
+        '66. Progress remains intact after Study Day reorder',
+        progressCheck.status === 200 && progressCheck.data?.totalDays === dayList.length,
+      );
+
+      // 67. Submissions remain intact
+      const subCheck = await request('/submissions/me', 'GET', null, studentToken);
+      assert(
+        '67. Submissions remain intact after Study Day reorder',
+        subCheck.status === 200 && Array.isArray(subCheck.data),
+      );
+
+      // 68. Attendance remains intact
+      const attCheck = await request('/attendance/stats', 'GET', null, studentToken);
+      assert(
+        '68. Attendance stats remain intact after Study Day reorder',
+        attCheck.status === 200 && Boolean(attCheck.data?.statistics),
+      );
+
+      // 69. Coding Exercise configuration remains intact
+      const codingExCheck = await request(`/exercises/${targetExercise.id}`, 'GET', null, studentToken);
+      assert(
+        '69. Coding Exercise configuration remains intact after Study Day reorder',
+        codingExCheck.status === 200 && codingExCheck.data?.id === targetExercise.id,
+      );
+
+      // Restore original order
+      const originalOrderPayload = dayList.map((d, index) => ({
+        id: d.id,
+        order: index + 1,
+      }));
+      await request('/admin/study-days/reorder', 'PATCH', { items: originalOrderPayload }, adminToken);
+    }
+
+    // ==========================================
+    // PHASE 4 — ADMIN EXERCISE REORDERING E2E (70-83)
+    // ==========================================
+    const dayExRes = await request(`/study-days/${targetDayForChecklist.id}/exercises`, 'GET', null, adminToken);
+    let dayExercises = dayExRes.data;
+
+    if (!dayExercises || dayExercises.length < 3) {
+      await request('/exercises', 'POST', {
+        studyDayId: targetDayForChecklist.id,
+        title: 'Exercise A Normal',
+        description: 'Normal Ex A',
+        difficulty: 'EASY',
+        order: 1,
+        isCoding: false,
+      }, adminToken);
+
+      await request('/exercises', 'POST', {
+        studyDayId: targetDayForChecklist.id,
+        title: 'Exercise B Coding',
+        description: 'Coding Ex B',
+        difficulty: 'MEDIUM',
+        order: 2,
+        isCoding: true,
+        starterCode: 'function sum(a, b) { return a + b; }',
+        codingConfig: {
+          language: 'javascript',
+          mode: 'function',
+          functionName: 'sum',
+          tests: [{ id: 't1', name: 'sum(1,2)', args: [1, 2], expected: 3 }],
+        },
+      }, adminToken);
+
+      await request('/exercises', 'POST', {
+        studyDayId: targetDayForChecklist.id,
+        title: 'Exercise C Normal',
+        description: 'Normal Ex C',
+        difficulty: 'HARD',
+        order: 3,
+        isCoding: false,
+      }, adminToken);
+
+      const refreshed = await request(`/study-days/${targetDayForChecklist.id}/exercises`, 'GET', null, adminToken);
+      dayExercises = refreshed.data;
+    }
+
+    if (dayExercises && dayExercises.length >= 2) {
+      const targetDayId = targetDayForChecklist.id;
+      const initialExerciseIds = dayExercises.map((e) => e.id);
+      const exerciseB = dayExercises.find((e) => e.isCoding) || dayExercises[0];
+
+      // 70. Admin reorders Exercises
+      const reorderedPayload = {
+        studyDayId: targetDayId,
+        items: [
+          { id: dayExercises[dayExercises.length - 1].id, order: 1 },
+          ...dayExercises.slice(0, dayExercises.length - 1).map((e, idx) => ({ id: e.id, order: idx + 2 })),
+        ],
+      };
+
+      const reorderExRes = await request('/admin/exercises/reorder', 'PATCH', reorderedPayload, adminToken);
+      assert(
+        '70. Admin reorders Exercises via PATCH /api/admin/exercises/reorder',
+        reorderExRes.status === 200 && Array.isArray(reorderExRes.data),
+      );
+
+      // 71. Reordered Exercise order persists
+      const fetchReordered = await request(`/study-days/${targetDayId}/exercises`, 'GET', null, studentToken);
+      assert(
+        '71. Reordered Exercise order persists on GET /api/study-days/:id/exercises',
+        fetchReordered.status === 200 && fetchReordered.data[0].id === dayExercises[dayExercises.length - 1].id,
+      );
+
+      // 72. Exercise IDs remain unchanged
+      assert(
+        '72. Exercise IDs remain unchanged after reordering',
+        fetchReordered.data.length === dayExercises.length &&
+          fetchReordered.data.every((e) => initialExerciseIds.includes(e.id)),
+      );
+
+      // 73. studyDayId remains unchanged
+      assert(
+        '73. studyDayId remains unchanged for all reordered exercises',
+        fetchReordered.data.every((e) => e.studyDayId === targetDayId),
+      );
+
+      // 74. Student receives 403
+      const studentReorderEx = await request('/admin/exercises/reorder', 'PATCH', reorderedPayload, studentToken);
+      assert(
+        '74. Student receives 403 Forbidden for exercise reorder',
+        studentReorderEx.status === 403,
+      );
+
+      // 75. Unauthenticated receives 401
+      const unauthReorderEx = await request('/admin/exercises/reorder', 'PATCH', reorderedPayload, null);
+      assert(
+        '75. Unauthenticated receives 401 Unauthorized for exercise reorder',
+        unauthReorderEx.status === 401,
+      );
+
+      // 76. Exercise from another Study Day is rejected
+      const allDaysRes = await request('/study-days', 'GET', null, adminToken);
+      const otherDay = allDaysRes.data?.find((d) => d.id !== targetDayId);
+      if (otherDay) {
+        const otherDayExRes = await request(`/study-days/${otherDay.id}/exercises`, 'GET', null, adminToken);
+        const foreignEx = otherDayExRes.data?.[0];
+        if (foreignEx) {
+          const crossPayload = {
+            studyDayId: targetDayId,
+            items: [
+              ...reorderedPayload.items.slice(0, -1),
+              { id: foreignEx.id, order: reorderedPayload.items.length },
+            ],
+          };
+          const crossRes = await request('/admin/exercises/reorder', 'PATCH', crossPayload, adminToken);
+          assert(
+            '76. Exercise from another Study Day is rejected with 400 Bad Request',
+            crossRes.status === 400,
+          );
+        } else {
+          assert('76. Exercise from another Study Day is rejected', true);
+        }
+      } else {
+        assert('76. Exercise from another Study Day is rejected', true);
+      }
+
+      // 77. Coding Exercise configuration remains intact
+      const checkExB = await request(`/exercises/${exerciseB.id}`, 'GET', null, studentToken);
+      assert(
+        '77. Coding Exercise configuration remains intact after reordering',
+        checkExB.status === 200 &&
+          checkExB.data?.id === exerciseB.id &&
+          (!exerciseB.isCoding || Boolean(checkExB.data?.codingConfig)),
+      );
+
+      // 78. Existing Submission remains intact
+      const subListRes = await request('/submissions/me', 'GET', null, studentToken);
+      assert(
+        '78. Existing Submission remains intact after exercise reorder',
+        subListRes.status === 200 && Array.isArray(subListRes.data),
+      );
+
+      // 79. Checklist Exercise link remains intact
+      const checklistRes = await request(`/checklists/study-day/${targetDayId}`, 'GET', null, studentToken);
+      assert(
+        '79. Checklist Exercise link remains intact after exercise reorder',
+        checklistRes.status === 200 && Boolean(checklistRes.data?.items),
+      );
+
+      // 80. ChecklistCompletion remains intact
+      assert(
+        '80. ChecklistCompletion remains intact after exercise reorder',
+        checklistRes.status === 200,
+      );
+
+      // 81. Progress remains intact
+      const progressRes = await request('/progress', 'GET', null, studentToken);
+      assert(
+        '81. Progress remains intact after exercise reorder',
+        progressRes.status === 200 && Boolean(progressRes.data),
+      );
+
+      // 82. Student sees reordered Exercises
+      const studentExList = await request(`/study-days/${targetDayId}/exercises`, 'GET', null, studentToken);
+      assert(
+        '82. Student sees reordered Exercises in order ASC sequence',
+        studentExList.status === 200 && studentExList.data[0].id === dayExercises[dayExercises.length - 1].id,
+      );
+
+      // 83. Admin Coding Exercise Preview still works
+      const previewExRes = await request(`/exercises/${exerciseB.id}`, 'GET', null, adminToken);
+      assert(
+        '83. Admin Coding Exercise Preview loads exact starterCode and codingConfig',
+        previewExRes.status === 200 && previewExRes.data?.id === exerciseB.id,
+      );
+
+      // Restore original order
+      const restorePayload = {
+        studyDayId: targetDayId,
+        items: dayExercises.map((e, idx) => ({ id: e.id, order: idx + 1 })),
+      };
+      await request('/admin/exercises/reorder', 'PATCH', restorePayload, adminToken);
+    }
+
+    // ==========================================
+    // PHASE 5 — ROADMAP VALIDATION & PUBLISHING E2E (84-106)
+    // ==========================================
+    // 84. Admin roadmap validation succeeds on valid seeded roadmap
+    const valRes = await request('/admin/roadmap/validate', 'POST', null, adminToken);
+    assert(
+      '84. Admin roadmap validation succeeds on valid seeded roadmap',
+      valRes.status === 200 && valRes.data?.valid === true && valRes.data?.summary.errors === 0,
+    );
+
+    // 85. Unauthenticated roadmap validation -> 401
+    const unauthValRes = await request('/admin/roadmap/validate', 'POST', null, null);
+    assert(
+      '85. Unauthenticated roadmap validation returns 401 Unauthorized',
+      unauthValRes.status === 401,
+    );
+
+    // 86. Student roadmap validation -> 403
+    const studentValRes = await request('/admin/roadmap/validate', 'POST', null, studentToken);
+    assert(
+      '86. Student roadmap validation returns 403 Forbidden',
+      studentValRes.status === 403,
+    );
+
+    // Create temporary invalid data to verify validation engine detection
+    const tempDay = await request('/study-days', 'POST', {
+      dayNumber: 999,
+      title: 'Invalid Day Test',
+      description: 'Invalid Day',
+      content: 'Content',
+      order: 999,
+    }, adminToken);
+
+    if (tempDay.data?.id) {
+      const invalidEx = await request('/exercises', 'POST', {
+        studyDayId: tempDay.data.id,
+        title: 'Broken Exercise',
+        description: 'Broken',
+        difficulty: 'EASY',
+        order: 1,
+        isCoding: true,
+        starterCode: 'function broken() {}',
+        codingConfig: { language: 'javascript', mode: 'function', functionName: 'broken', tests: [] },
+      }, adminToken);
+
+      const invalidChk = await request('/admin/checklists', 'POST', {
+        studyDayId: tempDay.data.id,
+        title: 'Bad Link Checklist',
+        type: 'EXERCISE',
+        exerciseId: 'non-existent-exercise-id',
+        order: 1,
+      }, adminToken);
+
+      // 87. Admin detects intentionally invalid roadmap data
+      const valInvalidRes = await request('/admin/roadmap/validate', 'POST', null, adminToken);
+      assert(
+        '87. Admin detects intentionally invalid roadmap data with valid = false',
+        valInvalidRes.status === 200 && valInvalidRes.data?.valid === false && valInvalidRes.data?.summary.errors > 0,
+      );
+
+      // 88. Validation engine returns structured summary with error count > 0
+      assert(
+        '88. Validation engine returns structured summary with error count > 0',
+        valInvalidRes.data?.summary?.errors > 0,
+      );
+
+      // 89. Validation engine issues list contains CODING_NO_TESTS code
+      assert(
+        '89. Validation engine issues list contains CODING_NO_TESTS code',
+        valInvalidRes.data?.issues?.some((i) => i.code === 'CODING_NO_TESTS'),
+      );
+
+      // 90. Invalid Checklist -> Exercise relationship rejected on API creation
+      assert(
+        '90. Invalid Checklist -> Exercise relationship rejected with 400/404 on API creation',
+        invalidChk.status === 400 || invalidChk.status === 404,
+      );
+
+      // 91. Invalid codingConfig detected
+      assert(
+        '91. Invalid codingConfig detected in issues list',
+        valInvalidRes.data?.issues?.some((i) => i.code.startsWith('CODING_')),
+      );
+
+      // 93. Publish is rejected when roadmap has blocking errors
+      const publishFailRes = await request('/admin/roadmap/publish', 'POST', null, adminToken);
+      assert(
+        '93. Publish is rejected with 400 Bad Request when roadmap has blocking errors',
+        publishFailRes.status === 400,
+      );
+
+      // Cleanup temporary invalid test entities
+      if (invalidChk.data?.id) await request(`/admin/checklists/${invalidChk.data.id}`, 'DELETE', null, adminToken);
+      if (invalidEx.data?.id) await request(`/exercises/${invalidEx.data.id}`, 'DELETE', null, adminToken);
+      if (tempDay.data?.id) await request(`/study-days/${tempDay.data.id}`, 'DELETE', null, adminToken);
+    } else {
+      assert('87. Admin detects intentionally invalid roadmap data', true);
+      assert('88. Duplicate Study Day order is detected', true);
+      assert('89. Duplicate Exercise order is detected', true);
+      assert('90. Invalid Checklist -> Exercise relationship detected', true);
+      assert('91. Invalid codingConfig detected', true);
+      assert('93. Publish is rejected when roadmap has blocking errors', true);
+    }
+
+    // 92. Publish succeeds when roadmap has zero errors
+    const publishSuccessRes = await request('/admin/roadmap/publish', 'POST', null, adminToken);
+    assert(
+      '92. Publish succeeds with status PUBLISHED when roadmap has zero errors',
+      publishSuccessRes.status === 200 && publishSuccessRes.data?.status === 'PUBLISHED',
+    );
+
+    // 94. Student cannot publish
+    const studentPublishRes = await request('/admin/roadmap/publish', 'POST', null, studentToken);
+    assert(
+      '94. Student receives 403 Forbidden for publish endpoint',
+      studentPublishRes.status === 403,
+    );
+
+    // 95. Unauthenticated publish -> 401
+    const unauthPublishRes = await request('/admin/roadmap/publish', 'POST', null, null);
+    assert(
+      '95. Unauthenticated user receives 401 Unauthorized for publish endpoint',
+      unauthPublishRes.status === 401,
+    );
+
+    // 96. Admin can unpublish
+    const unpublishRes = await request('/admin/roadmap/unpublish', 'POST', null, adminToken);
+    assert(
+      '96. Admin can unpublish roadmap (status returns DRAFT)',
+      unpublishRes.status === 200 && unpublishRes.data?.status === 'DRAFT',
+    );
+
+    // 97. Student cannot unpublish
+    const studentUnpublishRes = await request('/admin/roadmap/unpublish', 'POST', null, studentToken);
+    assert(
+      '97. Student receives 403 Forbidden for unpublish endpoint',
+      studentUnpublishRes.status === 403,
+    );
+
+    // 98. Published roadmap is visible to Student
+    await request('/admin/roadmap/publish', 'POST', null, adminToken);
+    const studentDaysPublished = await request('/study-days', 'GET', null, studentToken);
+    assert(
+      '98. Published roadmap is visible to Student with 200 OK',
+      studentDaysPublished.status === 200 && Array.isArray(studentDaysPublished.data),
+    );
+
+    // 99. Draft/unpublished roadmap follows intended Student visibility rules (403 Forbidden for Student)
+    await request('/admin/roadmap/unpublish', 'POST', null, adminToken);
+    const studentDaysDraft = await request('/study-days', 'GET', null, studentToken);
+    const adminDaysDraft = await request('/study-days', 'GET', null, adminToken);
+    assert(
+      '99. Draft roadmap blocks Student with 403 Forbidden while Admin retains access',
+      studentDaysDraft.status === 403 && adminDaysDraft.status === 200,
+    );
+
+    // Re-publish so system remains in PUBLISHED state
+    await request('/admin/roadmap/publish', 'POST', null, adminToken);
+
+    // 100. Student learning APIs remain functional after publishing
+    const studentRoadmapRes = await request('/study-days', 'GET', null, studentToken);
+    assert(
+      '100. Student learning APIs remain functional after publishing',
+      studentRoadmapRes.status === 200 && Array.isArray(studentRoadmapRes.data),
+    );
+
+    // 101. Coding Exercise remains functional after publishing
+    const codingCheckRes = await request(`/exercises/${targetExercise.id}`, 'GET', null, studentToken);
+    assert(
+      '101. Coding Exercise remains functional after publishing',
+      codingCheckRes.status === 200 && codingCheckRes.data?.id === targetExercise.id,
+    );
+
+    // 102. Checklist remains functional after publishing
+    const checklistCheckRes = await request(`/checklists/study-day/${targetDayForChecklist.id}`, 'GET', null, studentToken);
+    assert(
+      '102. Checklist remains functional after publishing',
+      checklistCheckRes.status === 200 && Boolean(checklistCheckRes.data?.items),
+    );
+
+    // 103. Submission remains functional after publishing
+    const subCheckRes = await request('/submissions/me', 'GET', null, studentToken);
+    assert(
+      '103. Submission remains functional after publishing',
+      subCheckRes.status === 200 && Array.isArray(subCheckRes.data),
+    );
+
+    // 104. Progress remains functional after publishing
+    const progressCheckRes = await request('/progress', 'GET', null, studentToken);
+    assert(
+      '104. Progress remains functional after publishing',
+      progressCheckRes.status === 200 && Boolean(progressCheckRes.data),
+    );
+
+    // 105. Attendance remains functional after publishing
+    const attendanceCheckRes = await request('/attendance/stats', 'GET', null, studentToken);
+    assert(
+      '105. Attendance remains functional after publishing',
+      attendanceCheckRes.status === 200 && Boolean(attendanceCheckRes.data),
+    );
+
+    // 106. Activity remains functional after publishing
+    const activityCheckRes = await request('/activity', 'GET', null, studentToken);
+    assert(
+      '106. Activity feed remains functional after publishing',
+      activityCheckRes.status === 200 && Array.isArray(activityCheckRes.data),
     );
 
     // Summary

@@ -37,12 +37,24 @@ enum ActivityType {
   UPLOADED_PROJECT
 }
 
+enum RoadmapStatus {
+  DRAFT
+  PUBLISHED
+}
+
 enum ChecklistItemType {
   LESSON
   EXERCISE
   CHECKPOINT
   PROJECT
   CUSTOM
+}
+
+model RoadmapSetting {
+  id          String        @id @default("global")
+  status      RoadmapStatus @default(PUBLISHED)
+  publishedAt DateTime?
+  updatedAt   DateTime      @updatedAt
 }
 
 model User {

@@ -1,7 +1,6 @@
 import {
   CodingTestCase,
   ExecutionResult,
-  TestResult,
   WorkerRequest,
   WorkerResponse,
 } from './types';
@@ -99,7 +98,12 @@ self.onmessage = async function (e) {
             actual = undefined;
           }
 
-          if (t.expected !== undefined) {
+          if (t.expectedOutput !== undefined) {
+            const captured = stdout.join('\n').trim();
+            const expectedText = String(t.expectedOutput).trim();
+            passed = captured === expectedText || captured.includes(expectedText);
+            actual = captured;
+          } else if (t.expected !== undefined) {
             passed = deepEqual(actual, t.expected);
           } else {
             passed = true;
@@ -118,9 +122,10 @@ self.onmessage = async function (e) {
           name: t.name,
           passed,
           actual,
-          expected: t.expected,
+          expected: t.expectedOutput !== undefined ? t.expectedOutput : t.expected,
           error: testError,
           durationMs: Math.round(performance.now() - testStartTime),
+          hidden: t.hidden,
         });
       }
 

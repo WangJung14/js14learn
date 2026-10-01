@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle2, AlertCircle, Sparkles, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { Exercise, CodingExerciseConfig } from '@/types';
 import { JavaScriptEditor } from './javascript-editor';
 import { CodeEditorToolbar } from './code-editor-toolbar';

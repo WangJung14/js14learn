@@ -11,6 +11,7 @@ import {
 import { ExercisesService } from './exercises.service';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { UpdateExerciseDto } from './dto/update-exercise.dto';
+import { ReorderExercisesDto } from './dto/reorder-exercises.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -39,6 +40,18 @@ export class ExercisesController {
   @Roles(Role.ADMIN)
   async create(@Body() dto: CreateExerciseDto) {
     return this.exercisesService.create(dto);
+  }
+
+  @Patch('admin/exercises/reorder')
+  @Roles(Role.ADMIN)
+  async reorderAdmin(@Body() dto: ReorderExercisesDto) {
+    return this.exercisesService.reorder(dto);
+  }
+
+  @Patch('exercises/reorder')
+  @Roles(Role.ADMIN)
+  async reorderAlias(@Body() dto: ReorderExercisesDto) {
+    return this.exercisesService.reorder(dto);
   }
 
   @Patch('exercises/:id')

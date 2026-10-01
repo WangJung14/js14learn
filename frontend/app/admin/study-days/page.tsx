@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2, Map } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Edit2, Trash2, CheckSquare, ArrowUp, ArrowDown } from 'lucide-react';
 import { studyDaysApi } from '@/lib/api';
 import { StudyDay } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +43,30 @@ export default function AdminStudyDaysPage() {
   useEffect(() => {
     loadStudyDays();
   }, []);
+
+  const handleMove = async (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= studyDays.length) return;
+
+    const newDays = [...studyDays];
+    const temp = newDays[index];
+    newDays[index] = newDays[targetIndex];
+    newDays[targetIndex] = temp;
+
+    const reorderedList = newDays.map((day, idx) => ({
+      id: day.id,
+      order: idx + 1,
+    }));
+
+    setStudyDays(newDays.map((d, idx) => ({ ...d, order: idx + 1 })));
+
+    try {
+      await studyDaysApi.reorder(reorderedList);
+    } catch (err: any) {
+      setError(err.message || 'Failed to reorder study days.');
+      await loadStudyDays();
+    }
+  };
 
   const openCreateModal = () => {
     setEditingDay(null);
@@ -157,15 +182,44 @@ export default function AdminStudyDaysPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {studyDays.map((day) => (
+              {studyDays.map((day, index) => (
                 <tr key={day.id} className="hover:bg-slate-900/50 transition-colors">
                   <td className="p-4 font-mono font-bold text-indigo-400">
                     Day {String(day.dayNumber).padStart(2, '0')}
                   </td>
                   <td className="p-4 font-bold text-slate-100">{day.title}</td>
                   <td className="p-4 text-slate-400 max-w-xs truncate">{day.description}</td>
-                  <td className="p-4 font-mono text-center text-slate-300">{day.order}</td>
-                  <td className="p-4 text-right space-x-2">
+                  <td className="p-4 font-mono text-center text-slate-300">
+                    <span className="px-2 py-1 bg-slate-900 border border-slate-800 rounded text-xs font-bold text-indigo-400">
+                      #{day.order}
+                    </span>
+                  </td>
+                  <td className="p-4 text-right space-x-1 sm:space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleMove(index, 'up')}
+                      disabled={index === 0}
+                      title="Move Up"
+                      className="px-2 py-1 text-xs border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleMove(index, 'down')}
+                      disabled={index === studyDays.length - 1}
+                      title="Move Down"
+                      className="px-2 py-1 text-xs border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </Button>
+                    <Link href={`/admin/checklists?studyDayId=${day.id}`}>
+                      <Button variant="outline" size="sm" className="px-2 py-1 text-xs border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10">
+                        <CheckSquare className="w-3.5 h-3.5 mr-1" /> Checklist
+                      </Button>
+                    </Link>
                     <Button onClick={() => openEditModal(day)} variant="outline" size="sm" className="px-2 py-1">
                       <Edit2 className="w-3.5 h-3.5" />
                     </Button>

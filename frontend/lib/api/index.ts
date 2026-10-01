@@ -13,6 +13,8 @@ import {
   SubmissionStatus,
   Role,
   StudyDayChecklistData,
+  ChecklistItem,
+  ChecklistItemType,
   TodayAttendanceData,
   Attendance,
   AttendanceStatsData,
@@ -126,6 +128,15 @@ export const studyDaysApi = {
       method: 'DELETE',
     });
   },
+
+  async reorder(
+    items: Array<{ id: string; order: number }>,
+  ): Promise<{ message: string }> {
+    return apiClient<{ message: string }>('/admin/study-days/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ items }),
+    });
+  },
 };
 
 export const exercisesApi = {
@@ -143,6 +154,9 @@ export const exercisesApi = {
     description: string;
     difficulty: string;
     order: number;
+    isCoding?: boolean;
+    starterCode?: string;
+    codingConfig?: unknown;
   }): Promise<Exercise> {
     return apiClient<Exercise>('/exercises', {
       method: 'POST',
@@ -157,6 +171,9 @@ export const exercisesApi = {
       description: string;
       difficulty: string;
       order: number;
+      isCoding?: boolean;
+      starterCode?: string;
+      codingConfig?: unknown;
     }>,
   ): Promise<Exercise> {
     return apiClient<Exercise>(`/exercises/${id}`, {
@@ -168,6 +185,70 @@ export const exercisesApi = {
   async delete(id: string): Promise<Exercise> {
     return apiClient<Exercise>(`/exercises/${id}`, {
       method: 'DELETE',
+    });
+  },
+
+  async reorder(
+    studyDayId: string,
+    items: Array<{ id: string; order: number }>,
+  ): Promise<Exercise[]> {
+    return apiClient<Exercise[]>('/admin/exercises/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ studyDayId, items }),
+    });
+  },
+};
+
+export const roadmapApi = {
+  async getStatus(): Promise<{
+    status: 'DRAFT' | 'PUBLISHED';
+    publishedAt?: string;
+    updatedAt?: string;
+  }> {
+    return apiClient('/admin/roadmap/status');
+  },
+
+  async validate(): Promise<{
+    valid: boolean;
+    summary: {
+      errors: number;
+      warnings: number;
+      infos: number;
+      studyDays: number;
+      exercises: number;
+      checklistItems: number;
+      codingExercises: number;
+    };
+    issues: Array<{
+      severity: 'ERROR' | 'WARNING' | 'INFO';
+      code: string;
+      message: string;
+      studyDayId?: string;
+      studyDayNumber?: number;
+      exerciseId?: string;
+      checklistItemId?: string;
+    }>;
+  }> {
+    return apiClient('/admin/roadmap/validate', {
+      method: 'POST',
+    });
+  },
+
+  async publish(): Promise<{
+    status: 'PUBLISHED';
+    publishedAt: string;
+    validationResult: unknown;
+  }> {
+    return apiClient('/admin/roadmap/publish', {
+      method: 'POST',
+    });
+  },
+
+  async unpublish(): Promise<{
+    status: 'DRAFT';
+  }> {
+    return apiClient('/admin/roadmap/unpublish', {
+      method: 'POST',
     });
   },
 };
@@ -289,6 +370,55 @@ export const checklistsApi = {
   async uncompleteItem(id: string): Promise<StudyDayChecklistData> {
     return apiClient<StudyDayChecklistData>(`/checklists/${id}/complete`, {
       method: 'DELETE',
+    });
+  },
+
+  // Admin Checklist endpoints
+  async adminCreate(data: {
+    studyDayId: string;
+    title: string;
+    description?: string;
+    type?: ChecklistItemType;
+    order?: number;
+    isRequired?: boolean;
+    exerciseId?: string;
+  }): Promise<ChecklistItem> {
+    return apiClient<ChecklistItem>('/admin/checklists', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async adminUpdate(
+    id: string,
+    data: Partial<{
+      studyDayId: string;
+      title: string;
+      description?: string;
+      type: ChecklistItemType;
+      order: number;
+      isRequired: boolean;
+      exerciseId?: string | null;
+    }>,
+  ): Promise<ChecklistItem> {
+    return apiClient<ChecklistItem>(`/admin/checklists/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async adminDelete(id: string): Promise<{ id: string }> {
+    return apiClient<{ id: string }>(`/admin/checklists/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async adminReorder(
+    items: Array<{ id: string; order: number }>,
+  ): Promise<{ message: string }> {
+    return apiClient<{ message: string }>('/admin/checklists/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ items }),
     });
   },
 };

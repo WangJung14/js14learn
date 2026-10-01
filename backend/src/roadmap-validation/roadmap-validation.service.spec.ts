@@ -2,7 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { RoadmapValidationService } from './roadmap-validation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BadRequestException } from '@nestjs/common';
-import { RoadmapStatus, ChecklistItemType, ExerciseDifficulty } from '@prisma/client';
+import {
+  RoadmapStatus,
+  ChecklistItemType,
+  ExerciseDifficulty,
+} from '@prisma/client';
 
 describe('RoadmapValidationService', () => {
   let service: RoadmapValidationService;
@@ -76,13 +80,31 @@ describe('RoadmapValidationService', () => {
 
   it('3. should detect duplicate Study Day order', async () => {
     prismaService.studyDay.findMany.mockResolvedValue([
-      { id: 'day-1', dayNumber: 1, title: 'D1', description: 'D1', order: 1, exercises: [], checklistItems: [] },
-      { id: 'day-2', dayNumber: 2, title: 'D2', description: 'D2', order: 1, exercises: [], checklistItems: [] },
+      {
+        id: 'day-1',
+        dayNumber: 1,
+        title: 'D1',
+        description: 'D1',
+        order: 1,
+        exercises: [],
+        checklistItems: [],
+      },
+      {
+        id: 'day-2',
+        dayNumber: 2,
+        title: 'D2',
+        description: 'D2',
+        order: 1,
+        exercises: [],
+        checklistItems: [],
+      },
     ]);
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'STUDY_DAY_DUPLICATE_ORDER')).toBe(true);
+    expect(res.issues.some((i) => i.code === 'STUDY_DAY_DUPLICATE_ORDER')).toBe(
+      true,
+    );
   });
 
   it('4. should detect duplicate Exercise order within same Study Day', async () => {
@@ -94,8 +116,22 @@ describe('RoadmapValidationService', () => {
         description: 'D1',
         order: 1,
         exercises: [
-          { id: 'ex-1', studyDayId: 'day-1', title: 'E1', description: 'E1', order: 1, isCoding: false },
-          { id: 'ex-2', studyDayId: 'day-1', title: 'E2', description: 'E2', order: 1, isCoding: false },
+          {
+            id: 'ex-1',
+            studyDayId: 'day-1',
+            title: 'E1',
+            description: 'E1',
+            order: 1,
+            isCoding: false,
+          },
+          {
+            id: 'ex-2',
+            studyDayId: 'day-1',
+            title: 'E2',
+            description: 'E2',
+            order: 1,
+            isCoding: false,
+          },
         ],
         checklistItems: [],
       },
@@ -103,7 +139,9 @@ describe('RoadmapValidationService', () => {
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'EXERCISE_DUPLICATE_ORDER')).toBe(true);
+    expect(res.issues.some((i) => i.code === 'EXERCISE_DUPLICATE_ORDER')).toBe(
+      true,
+    );
   });
 
   it('5. should detect duplicate Checklist order within same Study Day', async () => {
@@ -116,15 +154,29 @@ describe('RoadmapValidationService', () => {
         order: 1,
         exercises: [],
         checklistItems: [
-          { id: 'c1', studyDayId: 'day-1', title: 'C1', type: ChecklistItemType.LESSON, order: 1 },
-          { id: 'c2', studyDayId: 'day-1', title: 'C2', type: ChecklistItemType.LESSON, order: 1 },
+          {
+            id: 'c1',
+            studyDayId: 'day-1',
+            title: 'C1',
+            type: ChecklistItemType.LESSON,
+            order: 1,
+          },
+          {
+            id: 'c2',
+            studyDayId: 'day-1',
+            title: 'C2',
+            type: ChecklistItemType.LESSON,
+            order: 1,
+          },
         ],
       },
     ]);
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'CHECKLIST_DUPLICATE_ORDER')).toBe(true);
+    expect(res.issues.some((i) => i.code === 'CHECKLIST_DUPLICATE_ORDER')).toBe(
+      true,
+    );
   });
 
   it('7. should detect checklist referencing non-existent Exercise', async () => {
@@ -137,14 +189,23 @@ describe('RoadmapValidationService', () => {
         order: 1,
         exercises: [],
         checklistItems: [
-          { id: 'c1', studyDayId: 'day-1', title: 'C1', type: ChecklistItemType.EXERCISE, exerciseId: 'missing-ex', order: 1 },
+          {
+            id: 'c1',
+            studyDayId: 'day-1',
+            title: 'C1',
+            type: ChecklistItemType.EXERCISE,
+            exerciseId: 'missing-ex',
+            order: 1,
+          },
         ],
       },
     ]);
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'CHECKLIST_EXERCISE_NOT_FOUND')).toBe(true);
+    expect(
+      res.issues.some((i) => i.code === 'CHECKLIST_EXERCISE_NOT_FOUND'),
+    ).toBe(true);
   });
 
   it('8. should detect checklist referencing Exercise from another Study Day', async () => {
@@ -157,7 +218,14 @@ describe('RoadmapValidationService', () => {
         order: 1,
         exercises: [],
         checklistItems: [
-          { id: 'c1', studyDayId: 'day-1', title: 'C1', type: ChecklistItemType.EXERCISE, exerciseId: 'ex-day2', order: 1 },
+          {
+            id: 'c1',
+            studyDayId: 'day-1',
+            title: 'C1',
+            type: ChecklistItemType.EXERCISE,
+            exerciseId: 'ex-day2',
+            order: 1,
+          },
         ],
       },
       {
@@ -167,7 +235,14 @@ describe('RoadmapValidationService', () => {
         description: 'D2',
         order: 2,
         exercises: [
-          { id: 'ex-day2', studyDayId: 'day-2', title: 'E2', description: 'E2', order: 1, isCoding: false },
+          {
+            id: 'ex-day2',
+            studyDayId: 'day-2',
+            title: 'E2',
+            description: 'E2',
+            order: 1,
+            isCoding: false,
+          },
         ],
         checklistItems: [],
       },
@@ -175,7 +250,9 @@ describe('RoadmapValidationService', () => {
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'CHECKLIST_EXERCISE_MISMATCH')).toBe(true);
+    expect(
+      res.issues.some((i) => i.code === 'CHECKLIST_EXERCISE_MISMATCH'),
+    ).toBe(true);
   });
 
   it('9. should detect EXERCISE checklist item missing exerciseId', async () => {
@@ -188,14 +265,23 @@ describe('RoadmapValidationService', () => {
         order: 1,
         exercises: [],
         checklistItems: [
-          { id: 'c1', studyDayId: 'day-1', title: 'C1', type: ChecklistItemType.EXERCISE, exerciseId: null, order: 1 },
+          {
+            id: 'c1',
+            studyDayId: 'day-1',
+            title: 'C1',
+            type: ChecklistItemType.EXERCISE,
+            exerciseId: null,
+            order: 1,
+          },
         ],
       },
     ]);
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'CHECKLIST_EXERCISE_MISSING')).toBe(true);
+    expect(
+      res.issues.some((i) => i.code === 'CHECKLIST_EXERCISE_MISSING'),
+    ).toBe(true);
   });
 
   it('10. should detect Coding Exercise without codingConfig', async () => {
@@ -207,7 +293,15 @@ describe('RoadmapValidationService', () => {
         description: 'D1',
         order: 1,
         exercises: [
-          { id: 'ex-1', studyDayId: 'day-1', title: 'Coding Ex', description: 'C', order: 1, isCoding: true, codingConfig: null },
+          {
+            id: 'ex-1',
+            studyDayId: 'day-1',
+            title: 'Coding Ex',
+            description: 'C',
+            order: 1,
+            isCoding: true,
+            codingConfig: null,
+          },
         ],
         checklistItems: [],
       },
@@ -215,7 +309,9 @@ describe('RoadmapValidationService', () => {
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'CODING_CONFIG_INVALID')).toBe(true);
+    expect(res.issues.some((i) => i.code === 'CODING_CONFIG_INVALID')).toBe(
+      true,
+    );
   });
 
   it('11. should detect Coding Exercise invalid language', async () => {
@@ -234,7 +330,12 @@ describe('RoadmapValidationService', () => {
             description: 'C',
             order: 1,
             isCoding: true,
-            codingConfig: { language: 'python', mode: 'function', functionName: 'foo', tests: [{ id: 't1', name: 't1', expected: 1 }] },
+            codingConfig: {
+              language: 'python',
+              mode: 'function',
+              functionName: 'foo',
+              tests: [{ id: 't1', name: 't1', expected: 1 }],
+            },
           },
         ],
         checklistItems: [],
@@ -243,7 +344,9 @@ describe('RoadmapValidationService', () => {
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'CODING_LANGUAGE_INVALID')).toBe(true);
+    expect(res.issues.some((i) => i.code === 'CODING_LANGUAGE_INVALID')).toBe(
+      true,
+    );
   });
 
   it('12. should detect Coding Exercise missing functionName in function mode', async () => {
@@ -262,7 +365,12 @@ describe('RoadmapValidationService', () => {
             description: 'C',
             order: 1,
             isCoding: true,
-            codingConfig: { language: 'javascript', mode: 'function', functionName: '', tests: [{ id: 't1', name: 't1', expected: 1 }] },
+            codingConfig: {
+              language: 'javascript',
+              mode: 'function',
+              functionName: '',
+              tests: [{ id: 't1', name: 't1', expected: 1 }],
+            },
           },
         ],
         checklistItems: [],
@@ -271,7 +379,9 @@ describe('RoadmapValidationService', () => {
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'CODING_FUNCTION_NAME_MISSING')).toBe(true);
+    expect(
+      res.issues.some((i) => i.code === 'CODING_FUNCTION_NAME_MISSING'),
+    ).toBe(true);
   });
 
   it('13. should detect Coding Exercise with zero tests', async () => {
@@ -290,7 +400,12 @@ describe('RoadmapValidationService', () => {
             description: 'C',
             order: 1,
             isCoding: true,
-            codingConfig: { language: 'javascript', mode: 'function', functionName: 'sum', tests: [] },
+            codingConfig: {
+              language: 'javascript',
+              mode: 'function',
+              functionName: 'sum',
+              tests: [],
+            },
           },
         ],
         checklistItems: [],
@@ -335,7 +450,9 @@ describe('RoadmapValidationService', () => {
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'CODING_DUPLICATE_TEST_ID')).toBe(true);
+    expect(res.issues.some((i) => i.code === 'CODING_DUPLICATE_TEST_ID')).toBe(
+      true,
+    );
   });
 
   it('15. should detect invalid console test missing expectedOutput', async () => {
@@ -367,7 +484,9 @@ describe('RoadmapValidationService', () => {
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'CODING_CONSOLE_TEST_INVALID')).toBe(true);
+    expect(
+      res.issues.some((i) => i.code === 'CODING_CONSOLE_TEST_INVALID'),
+    ).toBe(true);
   });
 
   it('16. should detect invalid function test missing expected return value', async () => {
@@ -400,7 +519,9 @@ describe('RoadmapValidationService', () => {
 
     const res = await service.validateRoadmap();
     expect(res.valid).toBe(false);
-    expect(res.issues.some((i) => i.code === 'CODING_FUNCTION_TEST_INVALID')).toBe(true);
+    expect(
+      res.issues.some((i) => i.code === 'CODING_FUNCTION_TEST_INVALID'),
+    ).toBe(true);
   });
 
   it('17. should allow publishing when only WARNINGs exist', async () => {
@@ -412,7 +533,14 @@ describe('RoadmapValidationService', () => {
         description: '', // Warning: no description
         order: 1,
         exercises: [
-          { id: 'ex-1', studyDayId: 'day-1', title: 'E1', description: '', order: 1, isCoding: false },
+          {
+            id: 'ex-1',
+            studyDayId: 'day-1',
+            title: 'E1',
+            description: '',
+            order: 1,
+            isCoding: false,
+          },
         ],
         checklistItems: [], // Warning: no checklist items
       },
@@ -444,10 +572,24 @@ describe('RoadmapValidationService', () => {
         description: 'Desc',
         order: 1,
         exercises: [
-          { id: 'ex-1', studyDayId: 'day-1', title: 'E1', description: 'Desc', order: 1, isCoding: false },
+          {
+            id: 'ex-1',
+            studyDayId: 'day-1',
+            title: 'E1',
+            description: 'Desc',
+            order: 1,
+            isCoding: false,
+          },
         ],
         checklistItems: [
-          { id: 'c1', studyDayId: 'day-1', title: 'C1', type: ChecklistItemType.EXERCISE, exerciseId: 'ex-1', order: 1 },
+          {
+            id: 'c1',
+            studyDayId: 'day-1',
+            title: 'C1',
+            type: ChecklistItemType.EXERCISE,
+            exerciseId: 'ex-1',
+            order: 1,
+          },
         ],
       },
     ]);

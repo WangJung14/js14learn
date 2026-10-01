@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoadmapStatus } from '@prisma/client';
 import {
@@ -385,7 +382,10 @@ export class RoadmapValidationService {
         if (seenChkOrders.has(item.order)) {
           issues.push({
             severity: item.order === 0 ? 'WARNING' : 'ERROR',
-            code: item.order === 0 ? 'CHECKLIST_DEFAULT_ORDER' : 'CHECKLIST_DUPLICATE_ORDER',
+            code:
+              item.order === 0
+                ? 'CHECKLIST_DEFAULT_ORDER'
+                : 'CHECKLIST_DUPLICATE_ORDER',
             message:
               item.order === 0
                 ? `Checklist item "${item.title}" in Study Day ${day.dayNumber} uses default order #0.`

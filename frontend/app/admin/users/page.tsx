@@ -1,4 +1,3 @@
-'use me';
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -17,6 +16,7 @@ import {
   UserCheck,
   Search,
   AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function AdminUsersPage() {
@@ -38,9 +38,9 @@ export default function AdminUsersPage() {
       setLoading(true);
       setError(null);
       const data = await usersApi.getAllUsers();
-      setUsers(data);
+      setUsers(Array.isArray(data) ? data : []);
     } catch (err: unknown) {
-      setError((err as Error).message || 'Failed to load users.');
+      setError((err as Error).message || 'Failed to load user accounts.');
     } finally {
       setLoading(false);
     }
@@ -52,7 +52,7 @@ export default function AdminUsersPage() {
 
   const handleOpenRoleModal = (user: User) => {
     setSelectedUser(user);
-    setSelectedRole(user.role);
+    setSelectedRole(user.role || 'STUDENT');
     setUpdateError(null);
     setIsRoleModalOpen(true);
   };
@@ -65,7 +65,7 @@ export default function AdminUsersPage() {
       await usersApi.updateUserRole(selectedUser.id, selectedRole);
       setIsRoleModalOpen(false);
       setSelectedUser(null);
-      fetchUsers();
+      await fetchUsers();
     } catch (err: unknown) {
       setUpdateError((err as Error).message || 'Failed to update user role.');
     } finally {
@@ -74,51 +74,80 @@ export default function AdminUsersPage() {
   };
 
   const filteredUsers = users.filter((u) => {
+    const nameStr = u.name || '';
+    const emailStr = u.email || '';
     const matchesSearch =
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase());
+      nameStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emailStr.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
     return matchesSearch && matchesRole;
   });
 
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      const d = new Date(dateString);
+      if (isNaN(d.getTime())) return 'N/A';
+      return d.toLocaleDateString();
+    } catch {
+      return 'N/A';
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto p-2 sm:p-4 md:p-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800/80 pb-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">User Management</h1>
-          <p className="text-slate-600 text-sm mt-1">
-            Manage user accounts, assign roles, and audit registered students and administrators.
+          <div className="flex items-center space-x-2 text-indigo-400 font-semibold text-xs uppercase tracking-wider mb-1 font-mono">
+            <Users className="w-4 h-4" />
+            <span>User Management</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight">
+            Manage Users & Roles
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">
+            Audit registered student accounts and promote or manage administrator roles.
           </p>
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void fetchUsers()}
+          isLoading={loading}
+          className="self-start md:self-auto text-xs border-slate-800 hover:bg-slate-900"
+        >
+          <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Refresh List
+        </Button>
       </div>
 
       {/* Filters & Search */}
-      <Card className="p-4 bg-white shadow-sm border border-slate-200">
+      <Card className="p-4 bg-slate-900/80 border-slate-800/80 shadow-xl backdrop-blur-md rounded-2xl">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           {/* Search bar */}
           <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <Input
               type="text"
               placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 text-xs"
+              className="pl-10 text-xs bg-slate-950 border-slate-800 text-slate-100"
             />
           </div>
 
           {/* Role Filter Buttons */}
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <span className="text-xs font-semibold text-slate-600 mr-1">Role:</span>
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <span className="text-xs font-semibold text-slate-400 mr-1 font-mono">Role:</span>
             {['ALL', 'STUDENT', 'ADMIN'].map((role) => (
               <button
                 key={role}
                 onClick={() => setRoleFilter(role)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   roleFilter === role
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                    : 'bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
                 }`}
               >
                 {role === 'ALL' ? 'All Roles' : role}
@@ -128,88 +157,110 @@ export default function AdminUsersPage() {
         </div>
       </Card>
 
-      {/* Error state */}
+      {/* Error state with Retry */}
       {error && (
-        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <p className="text-sm">{error}</p>
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <p className="text-sm font-medium">{error}</p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void fetchUsers()}
+            className="text-xs border-rose-500/30 hover:bg-rose-500/10 text-rose-300 self-start sm:self-auto"
+          >
+            Retry
+          </Button>
         </div>
       )}
 
       {/* Users Table */}
-      <Card className="shadow-sm border border-slate-200 overflow-hidden">
-        <CardHeader className="bg-slate-50 border-b border-slate-200">
-          <CardTitle className="text-base font-semibold text-slate-800">
+      <Card className="shadow-2xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-md rounded-2xl overflow-hidden">
+        <CardHeader className="bg-slate-950/60 border-b border-slate-800/80 px-6 py-4">
+          <CardTitle className="text-sm font-bold text-slate-200 uppercase tracking-wider font-mono">
             Registered Users ({filteredUsers.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
             <div className="p-6 space-y-4">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
             </div>
           ) : filteredUsers.length === 0 ? (
-            <EmptyState
-              title="No users found"
-              description="No user records match your search criteria."
-            />
+            <div className="p-8">
+              <EmptyState
+                title="No users found"
+                description={
+                  searchQuery
+                    ? `No user records matching "${searchQuery}".`
+                    : 'No user accounts are currently registered.'
+                }
+              />
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-sm">
                 <thead>
-                  <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-600 text-xs font-semibold uppercase tracking-wider">
-                    <th className="py-3 px-4">User</th>
-                    <th className="py-3 px-4">Role</th>
-                    <th className="py-3 px-4">Group</th>
-                    <th className="py-3 px-4">Joined Date</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+                  <tr className="bg-slate-950/40 border-b border-slate-800/80 text-slate-400 text-xs font-semibold uppercase tracking-wider font-mono">
+                    <th className="py-3.5 px-6">User</th>
+                    <th className="py-3.5 px-6">Role</th>
+                    <th className="py-3.5 px-6">Joined Date</th>
+                    <th className="py-3.5 px-6 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
-                            {user.name.charAt(0).toUpperCase()}
+                <tbody className="divide-y divide-slate-800/60 bg-transparent">
+                  {filteredUsers.map((u) => {
+                    const avatarUrl =
+                      u.avatarUrl ||
+                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+                        u.name || 'User',
+                      )}`;
+
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="py-3.5 px-6">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={avatarUrl}
+                              alt={u.name || 'User'}
+                              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 object-cover shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-100 truncate">{u.name || 'Unnamed'}</p>
+                              <p className="text-xs text-slate-400 truncate">{u.email || 'No email'}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-slate-900">{user.name}</p>
-                            <p className="text-xs text-slate-500">{user.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        {user.role === 'ADMIN' ? (
-                          <Badge variant="ADMIN" className="flex items-center gap-1 w-fit">
-                            <Shield className="w-3 h-3" /> Admin
-                          </Badge>
-                        ) : (
-                          <Badge variant="STUDENT" className="flex items-center gap-1 w-fit">
-                            <UserCheck className="w-3 h-3" /> Student
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-xs text-slate-600">
-                        {user.groupMembers?.[0]?.group?.name ? user.groupMembers[0].group.name : <span className="text-slate-400 italic">No Group</span>}
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 text-xs">
-                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleOpenRoleModal(user)}
-                          className="text-xs"
-                        >
-                          Change Role
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-3.5 px-6">
+                          {u.role === 'ADMIN' ? (
+                            <Badge variant="ADMIN" className="flex items-center gap-1 w-fit font-mono text-[10px]">
+                              <Shield className="w-3 h-3" /> Admin
+                            </Badge>
+                          ) : (
+                            <Badge variant="STUDENT" className="flex items-center gap-1 w-fit font-mono text-[10px]">
+                              <UserCheck className="w-3 h-3" /> Student
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-6 text-slate-400 text-xs font-mono">
+                          {formatDate(u.createdAt)}
+                        </td>
+                        <td className="py-3.5 px-6 text-right">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleOpenRoleModal(u)}
+                            className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                          >
+                            Change Role
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -222,33 +273,34 @@ export default function AdminUsersPage() {
         isOpen={isRoleModalOpen}
         onClose={() => setIsRoleModalOpen(false)}
         title="Change User Role"
+        description="Update account permissions between Student and Administrator."
       >
         {selectedUser && (
           <div className="space-y-4">
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <p className="text-xs text-slate-500">Target User</p>
-              <p className="font-semibold text-slate-900 text-sm">{selectedUser.name}</p>
-              <p className="text-xs text-slate-600">{selectedUser.email}</p>
+            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+              <p className="text-xs text-slate-400 font-mono">Target User</p>
+              <p className="font-bold text-slate-100 text-sm mt-0.5">{selectedUser.name || 'Unnamed'}</p>
+              <p className="text-xs text-slate-400">{selectedUser.email || 'No email'}</p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block">
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wide block font-mono">
                 Select New Role
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => setSelectedRole('STUDENT')}
-                  className={`p-3 rounded-lg border text-left transition-all ${
+                  className={`p-3.5 rounded-xl border text-left transition-all ${
                     selectedRole === 'STUDENT'
-                      ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                      ? 'border-indigo-500 bg-indigo-950/40 ring-2 ring-indigo-500/20'
+                      : 'border-slate-800 bg-slate-950/60 hover:bg-slate-900'
                   }`}
                 >
-                  <p className="font-semibold text-xs text-slate-900 flex items-center gap-1.5">
-                    <UserCheck className="w-4 h-4 text-indigo-600" /> Student
+                  <p className="font-bold text-xs text-slate-100 flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-indigo-400" /> Student
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-1">
+                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                     Standard access to roadmap, exercises, submissions, and groups.
                   </p>
                 </button>
@@ -256,16 +308,16 @@ export default function AdminUsersPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedRole('ADMIN')}
-                  className={`p-3 rounded-lg border text-left transition-all ${
+                  className={`p-3.5 rounded-xl border text-left transition-all ${
                     selectedRole === 'ADMIN'
-                      ? 'border-purple-600 bg-purple-50/50 ring-2 ring-purple-500/20'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                      ? 'border-purple-500 bg-purple-950/40 ring-2 ring-purple-500/20'
+                      : 'border-slate-800 bg-slate-950/60 hover:bg-slate-900'
                   }`}
                 >
-                  <p className="font-semibold text-xs text-slate-900 flex items-center gap-1.5">
-                    <Shield className="w-4 h-4 text-purple-600" /> Admin
+                  <p className="font-bold text-xs text-slate-100 flex items-center gap-1.5">
+                    <Shield className="w-4 h-4 text-purple-400" /> Admin
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-1">
+                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                     Full management access to study days, exercises, submissions, and users.
                   </p>
                 </button>
@@ -273,10 +325,12 @@ export default function AdminUsersPage() {
             </div>
 
             {updateError && (
-              <p className="text-xs text-red-600 font-medium">{updateError}</p>
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs font-medium text-rose-400">
+                {updateError}
+              </div>
             )}
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
               <Button
                 variant="outline"
                 size="sm"
@@ -289,9 +343,9 @@ export default function AdminUsersPage() {
                 variant="primary"
                 size="sm"
                 onClick={handleUpdateRole}
-                disabled={updating}
+                isLoading={updating}
               >
-                {updating ? 'Updating...' : 'Save Role'}
+                Save Role
               </Button>
             </div>
           </div>

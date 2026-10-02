@@ -37,12 +37,24 @@ enum ActivityType {
   UPLOADED_PROJECT
 }
 
+enum RoadmapStatus {
+  DRAFT
+  PUBLISHED
+}
+
 enum ChecklistItemType {
   LESSON
   EXERCISE
   CHECKPOINT
   PROJECT
   CUSTOM
+}
+
+model RoadmapSetting {
+  id          String        @id @default("global")
+  status      RoadmapStatus @default(PUBLISHED)
+  publishedAt DateTime?
+  updatedAt   DateTime      @updatedAt
 }
 
 model User {
@@ -57,6 +69,8 @@ model User {
   updatedAt        DateTime      @updatedAt
 
   groupMembers         GroupMember[]
+  createdGroups        Group[]               @relation("GroupCreator")
+  groupMessages        GroupMessage[]
   submissions          Submission[]
   progress             Progress[]
   activities           Activity[]
@@ -65,25 +79,48 @@ model User {
 }
 
 model Group {
-  id         String        @id @default(uuid())
-  name       String
-  inviteCode String        @unique
-  createdAt  DateTime      @default(now())
+  id          String         @id @default(uuid())
+  name        String
+  description String?
+  inviteCode  String         @unique
+  creatorId   String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @default(now()) @updatedAt
 
-  members GroupMember[]
+  creator  User?          @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  members  GroupMember[]
+  messages GroupMessage[]
+
+  @@index([creatorId])
 }
 
 model GroupMember {
-  id       String   @id @default(uuid())
-  userId   String
-  groupId  String
-  joinedAt DateTime @default(now())
+  id         String    @id @default(uuid())
+  userId     String
+  groupId    String
+  joinedAt   DateTime  @default(now())
+  lastReadAt DateTime?
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([userId, groupId])
   @@index([groupId])
+  @@index([userId])
+}
+
+model GroupMessage {
+  id        String   @id @default(uuid())
+  groupId   String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, createdAt])
   @@index([userId])
 }
 
@@ -109,6 +146,9 @@ model Exercise {
   description String
   difficulty  ExerciseDifficulty @default(EASY)
   order       Int
+  isCoding    Boolean            @default(false)
+  starterCode String?
+  codingConfig Json?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
@@ -120,16 +160,19 @@ model Exercise {
 }
 
 model Submission {
-  id          String           @id @default(uuid())
-  exerciseId  String
-  userId      String
-  fileName    String
-  fileUrl     String
-  note        String?
-  adminNote   String?
-  status      SubmissionStatus @default(PENDING)
-  submittedAt DateTime         @default(now())
-  reviewedAt  DateTime?
+  id              String           @id @default(uuid())
+  exerciseId      String
+  userId          String
+  submissionType  String           @default("FILE")
+  code            String?
+  executionResult Json?
+  fileName        String?
+  fileUrl         String?
+  note            String?
+  adminNote       String?
+  status          SubmissionStatus @default(PENDING)
+  submittedAt     DateTime         @default(now())
+  reviewedAt      DateTime?
 
   exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)

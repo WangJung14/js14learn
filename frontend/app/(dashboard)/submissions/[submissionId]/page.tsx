@@ -87,20 +87,33 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ sub
         <CardHeader className="flex flex-row items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center space-x-2">
             <FileCode className="w-5 h-5 text-indigo-400" />
-            <CardTitle className="text-lg">Submission File Payload</CardTitle>
+            <CardTitle className="text-lg">
+              {submission.submissionType === 'CODE' ? 'JavaScript Source Code' : 'Submission File Payload'}
+            </CardTitle>
           </div>
-          <a
-            href={submission.signedUrl || submission.fileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center space-x-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"
-          >
-            <span>Open Solution File</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          {submission.submissionType !== 'CODE' && (submission.signedUrl || submission.fileUrl) && (
+            <a
+              href={submission.signedUrl || submission.fileUrl || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center space-x-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              <span>Open Solution File</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
         </CardHeader>
 
         <CardContent className="space-y-6">
+          {/* Code Viewer if CODE submission */}
+          {submission.code && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Source Code</h4>
+              <pre className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs font-mono text-indigo-200 overflow-x-auto whitespace-pre leading-relaxed">
+                <code>{submission.code}</code>
+              </pre>
+            </div>
+          )}
           {/* Student Note */}
           <div className="space-y-1.5">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Student Note</h4>

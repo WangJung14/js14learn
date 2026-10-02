@@ -8,11 +8,15 @@ import {
   ProgressSummary,
   DayProgressDetail,
   Group,
+  GroupMessage,
+  GroupMessagesResponse,
   Activity,
   DashboardData,
   SubmissionStatus,
   Role,
   StudyDayChecklistData,
+  ChecklistItem,
+  ChecklistItemType,
   TodayAttendanceData,
   Attendance,
   AttendanceStatsData,
@@ -126,6 +130,15 @@ export const studyDaysApi = {
       method: 'DELETE',
     });
   },
+
+  async reorder(
+    items: Array<{ id: string; order: number }>,
+  ): Promise<{ message: string }> {
+    return apiClient<{ message: string }>('/admin/study-days/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ items }),
+    });
+  },
 };
 
 export const exercisesApi = {
@@ -143,6 +156,9 @@ export const exercisesApi = {
     description: string;
     difficulty: string;
     order: number;
+    isCoding?: boolean;
+    starterCode?: string;
+    codingConfig?: unknown;
   }): Promise<Exercise> {
     return apiClient<Exercise>('/exercises', {
       method: 'POST',
@@ -157,6 +173,9 @@ export const exercisesApi = {
       description: string;
       difficulty: string;
       order: number;
+      isCoding?: boolean;
+      starterCode?: string;
+      codingConfig?: unknown;
     }>,
   ): Promise<Exercise> {
     return apiClient<Exercise>(`/exercises/${id}`, {
@@ -168,6 +187,70 @@ export const exercisesApi = {
   async delete(id: string): Promise<Exercise> {
     return apiClient<Exercise>(`/exercises/${id}`, {
       method: 'DELETE',
+    });
+  },
+
+  async reorder(
+    studyDayId: string,
+    items: Array<{ id: string; order: number }>,
+  ): Promise<Exercise[]> {
+    return apiClient<Exercise[]>('/admin/exercises/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ studyDayId, items }),
+    });
+  },
+};
+
+export const roadmapApi = {
+  async getStatus(): Promise<{
+    status: 'DRAFT' | 'PUBLISHED';
+    publishedAt?: string;
+    updatedAt?: string;
+  }> {
+    return apiClient('/admin/roadmap/status');
+  },
+
+  async validate(): Promise<{
+    valid: boolean;
+    summary: {
+      errors: number;
+      warnings: number;
+      infos: number;
+      studyDays: number;
+      exercises: number;
+      checklistItems: number;
+      codingExercises: number;
+    };
+    issues: Array<{
+      severity: 'ERROR' | 'WARNING' | 'INFO';
+      code: string;
+      message: string;
+      studyDayId?: string;
+      studyDayNumber?: number;
+      exerciseId?: string;
+      checklistItemId?: string;
+    }>;
+  }> {
+    return apiClient('/admin/roadmap/validate', {
+      method: 'POST',
+    });
+  },
+
+  async publish(): Promise<{
+    status: 'PUBLISHED';
+    publishedAt: string;
+    validationResult: unknown;
+  }> {
+    return apiClient('/admin/roadmap/publish', {
+      method: 'POST',
+    });
+  },
+
+  async unpublish(): Promise<{
+    status: 'DRAFT';
+  }> {
+    return apiClient('/admin/roadmap/unpublish', {
+      method: 'POST',
     });
   },
 };
@@ -187,6 +270,22 @@ export const submissionsApi = {
     return apiClient<Submission>('/submissions', {
       method: 'POST',
       body: formData,
+    });
+  },
+
+  async submitCode(data: {
+    exerciseId: string;
+    code: string;
+    executionSummary: {
+      passed: number;
+      total: number;
+      durationMs: number;
+    };
+    note?: string;
+  }): Promise<Submission> {
+    return apiClient<Submission>('/submissions/code', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   },
 
@@ -225,8 +324,43 @@ export const progressApi = {
 };
 
 export const groupsApi = {
+  async getAll(): Promise<Group[]> {
+    return apiClient<Group[]>('/groups');
+  },
+
+  async getById(id: string): Promise<Group> {
+    return apiClient<Group>(`/groups/${id}`);
+  },
+
   async getMyGroup(): Promise<Group> {
     return apiClient<Group>('/groups/me');
+  },
+
+  async create(data: {
+    name: string;
+    description?: string;
+    inviteCode?: string;
+  }): Promise<Group> {
+    return apiClient<Group>('/groups', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(
+    id: string,
+    data: { name?: string; description?: string },
+  ): Promise<Group> {
+    return apiClient<Group>(`/groups/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async delete(id: string): Promise<{ message: string; id: string }> {
+    return apiClient<{ message: string; id: string }>(`/groups/${id}`, {
+      method: 'DELETE',
+    });
   },
 
   async getMembers(groupId: string): Promise<User[]> {
@@ -242,6 +376,74 @@ export const groupsApi = {
       method: 'POST',
       body: JSON.stringify({ inviteCode }),
     });
+  },
+
+  async joinById(id: string): Promise<{ message: string; group: Group }> {
+    return apiClient<{ message: string; group: Group }>(`/groups/${id}/join`, {
+      method: 'POST',
+    });
+  },
+
+  async leave(id: string): Promise<{ message: string; groupId: string }> {
+    return apiClient<{ message: string; groupId: string }>(`/groups/${id}/leave`, {
+      method: 'POST',
+    });
+  },
+
+  async removeMember(
+    groupId: string,
+    userId: string,
+  ): Promise<{ message: string; userId: string }> {
+    return apiClient<{ message: string; userId: string }>(
+      `/groups/${groupId}/members/${userId}`,
+      {
+        method: 'DELETE',
+      },
+    );
+  },
+};
+
+export const chatApi = {
+  async getMessages(
+    groupId: string,
+    limit = 50,
+    before?: string,
+  ): Promise<GroupMessagesResponse> {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', limit.toString());
+    if (before) params.set('before', before);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiClient<GroupMessagesResponse>(`/groups/${groupId}/messages${query}`);
+  },
+
+  async sendMessage(
+    groupId: string,
+    content: string,
+    clientMessageId?: string,
+  ): Promise<GroupMessage> {
+    return apiClient<GroupMessage>(`/groups/${groupId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content, clientMessageId }),
+    });
+  },
+
+  async markAsRead(
+    groupId: string,
+  ): Promise<{ success: boolean; lastReadAt: string; groupId: string }> {
+    return apiClient<{ success: boolean; lastReadAt: string; groupId: string }>(
+      `/groups/${groupId}/messages/read`,
+      {
+        method: 'POST',
+      },
+    );
+  },
+
+  async getUnreadCount(
+    groupId: string,
+  ): Promise<{ groupId: string; unreadCount: number; lastReadAt?: string }> {
+    return apiClient<{ groupId: string; unreadCount: number; lastReadAt?: string }>(
+      `/groups/${groupId}/unread`,
+    );
   },
 };
 
@@ -273,6 +475,55 @@ export const checklistsApi = {
   async uncompleteItem(id: string): Promise<StudyDayChecklistData> {
     return apiClient<StudyDayChecklistData>(`/checklists/${id}/complete`, {
       method: 'DELETE',
+    });
+  },
+
+  // Admin Checklist endpoints
+  async adminCreate(data: {
+    studyDayId: string;
+    title: string;
+    description?: string;
+    type?: ChecklistItemType;
+    order?: number;
+    isRequired?: boolean;
+    exerciseId?: string;
+  }): Promise<ChecklistItem> {
+    return apiClient<ChecklistItem>('/admin/checklists', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async adminUpdate(
+    id: string,
+    data: Partial<{
+      studyDayId: string;
+      title: string;
+      description?: string;
+      type: ChecklistItemType;
+      order: number;
+      isRequired: boolean;
+      exerciseId?: string | null;
+    }>,
+  ): Promise<ChecklistItem> {
+    return apiClient<ChecklistItem>(`/admin/checklists/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async adminDelete(id: string): Promise<{ id: string }> {
+    return apiClient<{ id: string }>(`/admin/checklists/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async adminReorder(
+    items: Array<{ id: string; order: number }>,
+  ): Promise<{ message: string }> {
+    return apiClient<{ message: string }>('/admin/checklists/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ items }),
     });
   },
 };

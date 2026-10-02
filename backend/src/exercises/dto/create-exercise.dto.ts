@@ -1,4 +1,12 @@
-import { IsEnum, IsInt, IsNotEmpty, IsString, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsBoolean,
+  Min,
+} from 'class-validator';
 import { ExerciseDifficulty } from '@prisma/client';
 
 export class CreateExerciseDto {
@@ -22,4 +30,15 @@ export class CreateExerciseDto {
   @IsInt()
   @Min(1)
   order!: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isCoding?: boolean;
+
+  @IsOptional()
+  @IsString()
+  starterCode?: string;
+
+  @IsOptional()
+  codingConfig?: any;
 }

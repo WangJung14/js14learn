@@ -14,6 +14,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SubmissionsService, MulterFile } from './submissions.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
+import { CreateCodeSubmissionDto } from './dto/create-code-submission.dto';
 import { ReviewSubmissionDto } from './dto/review-submission.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -39,6 +40,14 @@ export class SubmissionsController {
       );
     }
     return this.submissionsService.submit(userId, file, dto);
+  }
+
+  @Post('submissions/code')
+  async submitCode(
+    @CurrentUser('sub') userId: string,
+    @Body() dto: CreateCodeSubmissionDto,
+  ) {
+    return this.submissionsService.submitCode(userId, dto);
   }
 
   @Get('submissions/me')

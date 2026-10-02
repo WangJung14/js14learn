@@ -138,6 +138,26 @@ You should be able to predict the result and explain why before running the code
           description: 'Build a small calculator using numeric input, arithmetic operators, conditionals, and formatted output.',
           difficulty: ExerciseDifficulty.MEDIUM,
           order: 4,
+          isCoding: true,
+          starterCode: `function calculate(a, b, operator) {
+  // Write your code here
+  if (operator === '+') return a + b;
+  if (operator === '-') return a - b;
+  if (operator === '*') return a * b;
+  if (operator === '/') return a / b;
+  return null;
+}`,
+          codingConfig: {
+            language: 'javascript',
+            mode: 'function',
+            functionName: 'calculate',
+            tests: [
+              { id: 't1', name: "calculate(2, 3, '+')", args: [2, 3, '+'], expected: 5 },
+              { id: 't2', name: "calculate(10, 5, '-')", args: [10, 5, '-'], expected: 5 },
+              { id: 't3', name: "calculate(4, 5, '*')", args: [4, 5, '*'], expected: 20 },
+              { id: 't4', name: "calculate(20, 4, '/')", args: [20, 4, '/'], expected: 5 },
+            ],
+          },
         },
         {
           title: 'Day 1 Checkpoint',
@@ -178,6 +198,26 @@ Solve control-flow problems without copying a solution.`,
           description: 'Print numbers 1-100 with Fizz, Buzz, and FizzBuzz using a loop and conditions.',
           difficulty: ExerciseDifficulty.EASY,
           order: 2,
+          isCoding: true,
+          starterCode: `function fizzBuzz(n) {
+  const result = [];
+  for (let i = 1; i <= n; i++) {
+    if (i % 3 === 0 && i % 5 === 0) result.push("FizzBuzz");
+    else if (i % 3 === 0) result.push("Fizz");
+    else if (i % 5 === 0) result.push("Buzz");
+    else result.push(i);
+  }
+  return result;
+}`,
+          codingConfig: {
+            language: 'javascript',
+            mode: 'function',
+            functionName: 'fizzBuzz',
+            tests: [
+              { id: 't1', name: 'fizzBuzz(5)', args: [5], expected: [1, 2, 'Fizz', 4, 'Buzz'] },
+              { id: 't2', name: 'fizzBuzz(15)', args: [15], expected: [1, 2, 'Fizz', 4, 'Buzz', 'Fizz', 7, 8, 'Fizz', 'Buzz', 11, 'Fizz', 13, 14, 'FizzBuzz'] },
+            ],
+          },
         },
         {
           title: 'Loop Statistics',
@@ -220,9 +260,24 @@ Refactor duplicated code into reusable functions.`,
       exercises: [
         {
           title: 'Function Basics',
-          description: 'Implement add, subtract, multiply, divide, min, max, and average as small reusable functions.',
+          description: 'Implement sum(a, b) as a reusable function.',
           difficulty: ExerciseDifficulty.EASY,
           order: 1,
+          isCoding: true,
+          starterCode: `function sum(a, b) {
+  // Return the sum of a and b
+  return a + b;
+}`,
+          codingConfig: {
+            language: 'javascript',
+            mode: 'function',
+            functionName: 'sum',
+            tests: [
+              { id: 't1', name: 'sum(2, 3)', args: [2, 3], expected: 5 },
+              { id: 't2', name: 'sum(10, 20)', args: [10, 20], expected: 30 },
+              { id: 't3', name: 'sum(-1, 5)', args: [-1, 5], expected: 4 },
+            ],
+          },
         },
         {
           title: 'Default and Rest Parameters',
@@ -319,9 +374,23 @@ Manipulate collections of student objects without losing data integrity.`,
       exercises: [
         {
           title: 'Array Fundamentals',
-          description: 'Practice push, pop, shift, unshift, slice, splice, and indexed access on a student score list.',
+          description: 'Practice filtering student scores greater than or equal to 50.',
           difficulty: ExerciseDifficulty.EASY,
           order: 1,
+          isCoding: true,
+          starterCode: `function processScores(scores) {
+  // Return array of scores >= 50
+  return scores.filter((s) => s >= 50);
+}`,
+          codingConfig: {
+            language: 'javascript',
+            mode: 'function',
+            functionName: 'processScores',
+            tests: [
+              { id: 't1', name: 'Filter passing scores [40, 55, 70, 30]', args: [[40, 55, 70, 30]], expected: [55, 70] },
+              { id: 't2', name: 'All passing scores [80, 90]', args: [[80, 90]], expected: [80, 90] },
+            ],
+          },
         },
         {
           title: 'Object Data Modeling',
@@ -435,9 +504,22 @@ Choose the appropriate array method instead of writing unnecessary loops.`,
         },
         {
           title: 'Mini-project: Product Management',
-          description: 'Build a product manager that supports search/filter, price calculations, stock summaries, and formatted product output using map/filter/reduce.',
+          description: 'Build a product manager that supports formatted product output using map/filter/reduce.',
           difficulty: ExerciseDifficulty.HARD,
           order: 4,
+          isCoding: true,
+          starterCode: `function formatProductNames(products) {
+  // Format products array into string array "NAME ($PRICE)"
+  return products.map((p) => \`\${p.name.toUpperCase()} ($\${p.price})\`);
+}`,
+          codingConfig: {
+            language: 'javascript',
+            mode: 'function',
+            functionName: 'formatProductNames',
+            tests: [
+              { id: 't1', name: 'Format laptop & mouse', args: [[{ name: 'laptop', price: 999 }, { name: 'mouse', price: 25 }]], expected: ['LAPTOP ($999)', 'MOUSE ($25)'] },
+            ],
+          },
         },
         {
           title: 'Day 7 Checkpoint',

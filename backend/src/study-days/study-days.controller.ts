@@ -17,34 +17,48 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '@prisma/client';
 
-@Controller('study-days')
+import { ReorderStudyDaysDto } from './dto/reorder-study-days.dto';
+
+@Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class StudyDaysController {
   constructor(private readonly studyDaysService: StudyDaysService) {}
 
-  @Get()
+  @Get('study-days')
   async findAll(@CurrentUser('sub') userId: string) {
     return this.studyDaysService.findAll(userId);
   }
 
-  @Get(':id')
+  @Get('study-days/:id')
   async findOne(@Param('id') id: string, @CurrentUser('sub') userId: string) {
     return this.studyDaysService.findOne(id, userId);
   }
 
-  @Post()
+  @Post('study-days')
   @Roles(Role.ADMIN)
   async create(@Body() dto: CreateStudyDayDto) {
     return this.studyDaysService.create(dto);
   }
 
-  @Patch(':id')
+  @Patch('admin/study-days/reorder')
+  @Roles(Role.ADMIN)
+  async reorderAdmin(@Body() dto: ReorderStudyDaysDto) {
+    return this.studyDaysService.reorder(dto);
+  }
+
+  @Patch('study-days/reorder')
+  @Roles(Role.ADMIN)
+  async reorderAlias(@Body() dto: ReorderStudyDaysDto) {
+    return this.studyDaysService.reorder(dto);
+  }
+
+  @Patch('study-days/:id')
   @Roles(Role.ADMIN)
   async update(@Param('id') id: string, @Body() dto: UpdateStudyDayDto) {
     return this.studyDaysService.update(id, dto);
   }
 
-  @Delete(':id')
+  @Delete('study-days/:id')
   @Roles(Role.ADMIN)
   async remove(@Param('id') id: string) {
     return this.studyDaysService.remove(id);

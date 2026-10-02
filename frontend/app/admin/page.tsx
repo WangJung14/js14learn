@@ -168,6 +168,21 @@ export default function AdminDashboardPage() {
             </Button>
           </Link>
         </Card>
+
+        <Card className="p-6 flex flex-col justify-between space-y-4 hover:border-amber-500/50 transition-colors">
+          <div className="space-y-2">
+            <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-lg w-fit">
+              <Shield className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-slate-100">Roadmap Validation</h3>
+            <p className="text-xs text-slate-400">Validate curriculum integrity and publish/unpublish roadmap.</p>
+          </div>
+          <Link href="/admin/roadmap">
+            <Button variant="outline" size="sm" className="w-full">
+              Validate &amp; Publish <ArrowRight className="w-4 h-4 ml-1.5" />
+            </Button>
+          </Link>
+        </Card>
       </div>
     </div>
   );

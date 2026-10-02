@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { ChecklistsService } from '../checklists/checklists.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { SubmissionStatus, ProgressStatus, ActivityType } from '@prisma/client';
+import { SubmissionStatus } from '@prisma/client';
 
 describe('SubmissionsService - Code Submissions', () => {
   let service: SubmissionsService;

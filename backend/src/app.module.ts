@@ -13,6 +13,7 @@ import { ExercisesModule } from './exercises/exercises.module';
 import { SubmissionsModule } from './submissions/submissions.module';
 import { ProgressModule } from './progress/progress.module';
 import { GroupsModule } from './groups/groups.module';
+import { ChatModule } from './chat/chat.module';
 import { ActivityModule } from './activity/activity.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { StorageModule } from './storage/storage.module';
@@ -36,6 +37,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     SubmissionsModule,
     ProgressModule,
     GroupsModule,
+    ChatModule,
     ActivityModule,
     ChecklistsModule,
     AttendanceModule,

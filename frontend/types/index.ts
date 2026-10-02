@@ -43,8 +43,21 @@ export interface AuthResponse {
 export interface Group {
   id: string;
   name: string;
+  description?: string | null;
   inviteCode: string;
+  creatorId?: string | null;
+  creator?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+  } | null;
+  memberCount?: number;
+  messageCount?: number;
+  isMember?: boolean;
+  isOwner?: boolean;
   createdAt: string;
+  updatedAt?: string;
   members?: GroupMemberProgress[];
 }
 
@@ -53,6 +66,7 @@ export interface GroupMember {
   userId: string;
   groupId: string;
   joinedAt: string;
+  lastReadAt?: string | null;
   user?: User;
   group?: Group;
 }
@@ -63,11 +77,34 @@ export interface GroupMemberProgress {
   email: string;
   avatarUrl?: string | null;
   joinedAt: string;
-  completedDays: number;
-  totalDays: number;
-  percentage: number;
-  currentDayNumber: number;
-  completedExercises: number;
+  isOwner?: boolean;
+  completedDays?: number;
+  totalDays?: number;
+  percentage?: number;
+  currentDayNumber?: number;
+  completedExercises?: number;
+}
+
+export interface GroupMessage {
+  id: string;
+  groupId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  updatedAt?: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+  };
+  clientMessageId?: string;
+}
+
+export interface GroupMessagesResponse {
+  messages: GroupMessage[];
+  hasMore: boolean;
+  nextCursor?: string | null;
 }
 
 export interface StudyDay {

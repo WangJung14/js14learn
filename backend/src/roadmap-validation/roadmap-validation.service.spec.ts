@@ -2,11 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { RoadmapValidationService } from './roadmap-validation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BadRequestException } from '@nestjs/common';
-import {
-  RoadmapStatus,
-  ChecklistItemType,
-  ExerciseDifficulty,
-} from '@prisma/client';
+import { RoadmapStatus, ChecklistItemType } from '@prisma/client';
 
 describe('RoadmapValidationService', () => {
   let service: RoadmapValidationService;

@@ -8,6 +8,8 @@ import {
   ProgressSummary,
   DayProgressDetail,
   Group,
+  GroupMessage,
+  GroupMessagesResponse,
   Activity,
   DashboardData,
   SubmissionStatus,
@@ -322,8 +324,43 @@ export const progressApi = {
 };
 
 export const groupsApi = {
+  async getAll(): Promise<Group[]> {
+    return apiClient<Group[]>('/groups');
+  },
+
+  async getById(id: string): Promise<Group> {
+    return apiClient<Group>(`/groups/${id}`);
+  },
+
   async getMyGroup(): Promise<Group> {
     return apiClient<Group>('/groups/me');
+  },
+
+  async create(data: {
+    name: string;
+    description?: string;
+    inviteCode?: string;
+  }): Promise<Group> {
+    return apiClient<Group>('/groups', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(
+    id: string,
+    data: { name?: string; description?: string },
+  ): Promise<Group> {
+    return apiClient<Group>(`/groups/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async delete(id: string): Promise<{ message: string; id: string }> {
+    return apiClient<{ message: string; id: string }>(`/groups/${id}`, {
+      method: 'DELETE',
+    });
   },
 
   async getMembers(groupId: string): Promise<User[]> {
@@ -339,6 +376,74 @@ export const groupsApi = {
       method: 'POST',
       body: JSON.stringify({ inviteCode }),
     });
+  },
+
+  async joinById(id: string): Promise<{ message: string; group: Group }> {
+    return apiClient<{ message: string; group: Group }>(`/groups/${id}/join`, {
+      method: 'POST',
+    });
+  },
+
+  async leave(id: string): Promise<{ message: string; groupId: string }> {
+    return apiClient<{ message: string; groupId: string }>(`/groups/${id}/leave`, {
+      method: 'POST',
+    });
+  },
+
+  async removeMember(
+    groupId: string,
+    userId: string,
+  ): Promise<{ message: string; userId: string }> {
+    return apiClient<{ message: string; userId: string }>(
+      `/groups/${groupId}/members/${userId}`,
+      {
+        method: 'DELETE',
+      },
+    );
+  },
+};
+
+export const chatApi = {
+  async getMessages(
+    groupId: string,
+    limit = 50,
+    before?: string,
+  ): Promise<GroupMessagesResponse> {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', limit.toString());
+    if (before) params.set('before', before);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiClient<GroupMessagesResponse>(`/groups/${groupId}/messages${query}`);
+  },
+
+  async sendMessage(
+    groupId: string,
+    content: string,
+    clientMessageId?: string,
+  ): Promise<GroupMessage> {
+    return apiClient<GroupMessage>(`/groups/${groupId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content, clientMessageId }),
+    });
+  },
+
+  async markAsRead(
+    groupId: string,
+  ): Promise<{ success: boolean; lastReadAt: string; groupId: string }> {
+    return apiClient<{ success: boolean; lastReadAt: string; groupId: string }>(
+      `/groups/${groupId}/messages/read`,
+      {
+        method: 'POST',
+      },
+    );
+  },
+
+  async getUnreadCount(
+    groupId: string,
+  ): Promise<{ groupId: string; unreadCount: number; lastReadAt?: string }> {
+    return apiClient<{ groupId: string; unreadCount: number; lastReadAt?: string }>(
+      `/groups/${groupId}/unread`,
+    );
   },
 };
 

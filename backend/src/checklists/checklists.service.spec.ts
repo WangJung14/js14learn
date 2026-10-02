@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ChecklistsService } from './checklists.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { ChecklistItemType, SubmissionStatus } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
+import { ChecklistItemType } from '@prisma/client';
 
 describe('ChecklistsService - Admin Checklist Manager', () => {
   let service: ChecklistsService;

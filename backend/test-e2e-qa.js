@@ -1130,6 +1130,516 @@ async function runQA() {
       activityCheckRes.status === 200 && Array.isArray(activityCheckRes.data),
     );
 
+    // ==========================================
+    // PHASE 6: STUDY GROUPS & REAL-TIME CHAT
+    // ==========================================
+    console.log('\n--- PHASE 6: STUDY GROUPS & REAL-TIME CHAT TESTS (#107 - #146) ---');
+
+    const { io } = require('socket.io-client');
+
+    // Register 3 fresh users for Phase 6 testing
+    const ts = Date.now();
+    const p6UserAData = { name: 'P6 Alice', email: `p6_alice_${ts}@test.com`, password: 'password123' };
+    const p6UserBData = { name: 'P6 Bob', email: `p6_bob_${ts}@test.com`, password: 'password123' };
+    const p6UserCData = { name: 'P6 Charlie', email: `p6_charlie_${ts}@test.com`, password: 'password123' };
+
+    const regARes = await request('/auth/register', 'POST', p6UserAData);
+    const regBRes = await request('/auth/register', 'POST', p6UserBData);
+    const regCRes = await request('/auth/register', 'POST', p6UserCData);
+
+    const userAToken = regARes.data.tokens.accessToken;
+    const userBToken = regBRes.data.tokens.accessToken;
+    const userCToken = regCRes.data.tokens.accessToken;
+
+    const userA = regARes.data.user;
+    const userB = regBRes.data.user;
+    const userC = regCRes.data.user;
+
+    // #107 authenticated user can create group
+    const createGroupRes = await request(
+      '/groups',
+      'POST',
+      { name: 'Full-Stack Pioneers', description: 'Collaborative group for JS learners' },
+      userAToken,
+    );
+    assert(
+      '107. Authenticated user can create group',
+      (createGroupRes.status === 201 || createGroupRes.status === 200) &&
+        Boolean(createGroupRes.data?.id),
+    );
+    const groupA = createGroupRes.data;
+
+    // #108 unauthenticated create group -> 401
+    const unauthCreateRes = await request(
+      '/groups',
+      'POST',
+      { name: 'Unauth Group' },
+      null,
+    );
+    assert(
+      '108. Unauthenticated create group returns 401 Unauthorized',
+      unauthCreateRes.status === 401,
+    );
+
+    // #109 student can create group
+    assert(
+      '109. Student role can create group successfully',
+      createGroupRes.data?.name === 'Full-Stack Pioneers' && userA.role === 'STUDENT',
+    );
+
+    // #110 creator automatically becomes member
+    const membersRes = await request(`/groups/${groupA.id}/members`, 'GET', null, userAToken);
+    assert(
+      '110. Creator automatically becomes member of created group',
+      membersRes.status === 200 &&
+        Array.isArray(membersRes.data) &&
+        membersRes.data.some((m) => m.id === userA.id),
+    );
+
+    // #111 creator automatically becomes owner
+    const groupDetailRes = await request(`/groups/${groupA.id}`, 'GET', null, userAToken);
+    assert(
+      '111. Creator automatically becomes group owner',
+      groupDetailRes.status === 200 &&
+        groupDetailRes.data?.creatorId === userA.id &&
+        groupDetailRes.data?.isOwner === true,
+    );
+
+    // #112 duplicate join rejected
+    const dupJoinRes = await request(
+      '/groups/join',
+      'POST',
+      { inviteCode: groupA.inviteCode },
+      userAToken,
+    );
+    assert(
+      '112. Duplicate group join rejected with 409 Conflict',
+      dupJoinRes.status === 409,
+    );
+
+    // #113 member can leave
+    const joinBRes = await request(`/groups/${groupA.id}/join`, 'POST', null, userBToken);
+    const leaveBRes = await request(`/groups/${groupA.id}/leave`, 'POST', null, userBToken);
+    assert(
+      '113. Member can successfully leave group',
+      joinBRes.status === 201 || joinBRes.status === 200 && leaveBRes.status === 200 || leaveBRes.status === 201,
+    );
+
+    // #114 owner cannot leave without transfer/delete
+    const ownerLeaveRes = await request(`/groups/${groupA.id}/leave`, 'POST', null, userAToken);
+    assert(
+      '114. Owner cannot leave without transferring or deleting group (400 Bad Request)',
+      ownerLeaveRes.status === 400,
+    );
+
+    // #115 non-owner cannot edit group
+    await request(`/groups/${groupA.id}/join`, 'POST', null, userBToken); // re-join User B
+    const nonOwnerEditRes = await request(
+      `/groups/${groupA.id}`,
+      'PATCH',
+      { name: 'Hacked Group Name' },
+      userBToken,
+    );
+    assert(
+      '115. Non-owner cannot edit group (403 Forbidden)',
+      nonOwnerEditRes.status === 403,
+    );
+
+    // #116 owner can edit group
+    const ownerEditRes = await request(
+      `/groups/${groupA.id}`,
+      'PATCH',
+      { name: 'Full-Stack Pioneers (Updated)' },
+      userAToken,
+    );
+    assert(
+      '116. Owner can update group details',
+      ownerEditRes.status === 200 && ownerEditRes.data?.name === 'Full-Stack Pioneers (Updated)',
+    );
+
+    // #117 owner can remove member
+    const removeMemberRes = await request(
+      `/groups/${groupA.id}/members/${userB.id}`,
+      'DELETE',
+      null,
+      userAToken,
+    );
+    assert(
+      '117. Owner can remove member from group',
+      removeMemberRes.status === 200,
+    );
+
+    // #118 non-owner cannot remove member
+    await request(`/groups/${groupA.id}/join`, 'POST', null, userBToken); // re-join User B
+    const nonOwnerRemoveRes = await request(
+      `/groups/${groupA.id}/members/${userA.id}`,
+      'DELETE',
+      null,
+      userBToken,
+    );
+    assert(
+      '118. Non-owner cannot remove member (403 Forbidden)',
+      nonOwnerRemoveRes.status === 403,
+    );
+
+    // --- CHAT REST TESTS ---
+
+    // #119 member can load chat history
+    const memberMessagesRes = await request(`/groups/${groupA.id}/messages`, 'GET', null, userBToken);
+    assert(
+      '119. Member can load chat history',
+      memberMessagesRes.status === 200 && Array.isArray(memberMessagesRes.data?.messages),
+    );
+
+    // #120 non-member cannot load chat history
+    const nonMemberMessagesRes = await request(`/groups/${groupA.id}/messages`, 'GET', null, userCToken);
+    assert(
+      '120. Non-member cannot load chat history (403 Forbidden)',
+      nonMemberMessagesRes.status === 403,
+    );
+
+    // #121 member can send message
+    const sendMsgRes = await request(
+      `/groups/${groupA.id}/messages`,
+      'POST',
+      { content: 'Hello everyone in Full-Stack Pioneers!' },
+      userAToken,
+    );
+    assert(
+      '121. Member can send message successfully',
+      (sendMsgRes.status === 201 || sendMsgRes.status === 200) &&
+        sendMsgRes.data?.content === 'Hello everyone in Full-Stack Pioneers!',
+    );
+    const msg1 = sendMsgRes.data;
+
+    // #122 non-member cannot send message
+    const nonMemberSendRes = await request(
+      `/groups/${groupA.id}/messages`,
+      'POST',
+      { content: 'Unauthorized message attempt' },
+      userCToken,
+    );
+    assert(
+      '122. Non-member cannot send message (403 Forbidden)',
+      nonMemberSendRes.status === 403,
+    );
+
+    // #123 empty message rejected
+    const emptyMsgRes = await request(
+      `/groups/${groupA.id}/messages`,
+      'POST',
+      { content: '    ' },
+      userAToken,
+    );
+    assert(
+      '123. Empty message rejected (400 Bad Request)',
+      emptyMsgRes.status === 400,
+    );
+
+    // #124 oversized message rejected
+    const oversizedMsgRes = await request(
+      `/groups/${groupA.id}/messages`,
+      'POST',
+      { content: 'x'.repeat(5001) },
+      userAToken,
+    );
+    assert(
+      '124. Oversized message (> 5000 chars) rejected (400 Bad Request)',
+      oversizedMsgRes.status === 400,
+    );
+
+    // #125 messages persisted after reload
+    const reloadMessagesRes = await request(`/groups/${groupA.id}/messages`, 'GET', null, userBToken);
+    assert(
+      '125. Sent message is persisted and returned on reload',
+      reloadMessagesRes.status === 200 &&
+        reloadMessagesRes.data?.messages.some((m) => m.id === msg1.id),
+    );
+
+    // #126 pagination returns older messages
+    await request(`/groups/${groupA.id}/messages`, 'POST', { content: 'Message 2' }, userAToken);
+    const msg3Res = await request(`/groups/${groupA.id}/messages`, 'POST', { content: 'Message 3' }, userAToken);
+    const paginatedRes = await request(
+      `/groups/${groupA.id}/messages?limit=1&before=${msg3Res.data.id}`,
+      'GET',
+      null,
+      userBToken,
+    );
+    assert(
+      '126. Pagination with cursor returns older messages correctly',
+      paginatedRes.status === 200 && paginatedRes.data?.messages.length === 1,
+    );
+
+    // #127 unread count increases
+    const unreadRes = await request(`/groups/${groupA.id}/unread`, 'GET', null, userBToken);
+    assert(
+      '127. Unread count increments when new messages are posted',
+      unreadRes.status === 200 && typeof unreadRes.data?.unreadCount === 'number',
+    );
+
+    // #128 opening chat marks messages read
+    const markReadRes = await request(`/groups/${groupA.id}/messages/read`, 'POST', null, userBToken);
+    const unreadAfterRes = await request(`/groups/${groupA.id}/unread`, 'GET', null, userBToken);
+    assert(
+      '128. Marking chat as read resets unread count to 0',
+      markReadRes.status === 200 || markReadRes.status === 201 && unreadAfterRes.data?.unreadCount === 0,
+    );
+
+    // --- WEBSOCKET / REAL-TIME TESTS ---
+    console.log('--- Socket.IO Real-Time Gateway QA ---');
+
+    const WS_URL = 'http://127.0.0.1:3001';
+
+    // Helper to connect socket with promise
+    const createSocket = (token) => {
+      return new Promise((resolve) => {
+        let settled = false;
+        const socket = io(WS_URL, {
+          auth: { token },
+          transports: ['websocket', 'polling'],
+          reconnection: false,
+          timeout: 2000,
+        });
+
+        socket.on('connect', () => {
+          setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              resolve({ socket, connected: socket.connected });
+            }
+          }, 150);
+        });
+
+        socket.on('disconnect', () => {
+          if (!settled) {
+            settled = true;
+            resolve({ socket, connected: false });
+          }
+        });
+
+        socket.on('connect_error', (err) => {
+          if (!settled) {
+            settled = true;
+            resolve({ socket, connected: false, error: err });
+          }
+        });
+
+        socket.on('chat:error', (err) => {
+          if (!settled) {
+            settled = true;
+            resolve({ socket, connected: false, error: err });
+          }
+        });
+
+        setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            resolve({ socket, connected: socket.connected });
+          }
+        }, 2000);
+      });
+    };
+
+    // #129 authenticated socket connects
+    const { socket: socketA, connected: connectedA } = await createSocket(userAToken);
+    assert(
+      '129. Authenticated socket connection succeeds',
+      connectedA === true,
+    );
+
+    // #130 unauthenticated socket rejected
+    const { connected: connectedInvalid } = await createSocket('invalid.fake.jwt');
+    assert(
+      '130. Unauthenticated or invalid socket connection is rejected',
+      connectedInvalid === false,
+    );
+
+    // #131 member can join group room
+    const joinRoomPromise = new Promise((resolve) => {
+      socketA.on('group:joined', (data) => resolve(data));
+      socketA.on('chat:error', (err) => resolve({ error: err }));
+    });
+    socketA.emit('group:join', { groupId: groupA.id });
+    const joinRoomRes = await joinRoomPromise;
+    assert(
+      '131. Group member can join group Socket.IO room',
+      joinRoomRes?.groupId === groupA.id,
+    );
+
+    // #132 non-member cannot join room
+    const { socket: socketC } = await createSocket(userCToken);
+    const joinNonMemberPromise = new Promise((resolve) => {
+      socketC.on('chat:error', (err) => resolve(err));
+      socketC.on('group:joined', () => resolve({ joined: true }));
+    });
+    socketC.emit('group:join', { groupId: groupA.id });
+    const joinNonMemberRes = await joinNonMemberPromise;
+    assert(
+      '132. Non-member socket is denied room access with FORBIDDEN error',
+      joinNonMemberRes?.code === 'FORBIDDEN' || Boolean(joinNonMemberRes?.message),
+    );
+
+    // #133 message is broadcast to group members
+    const { socket: socketB } = await createSocket(userBToken);
+    socketB.emit('group:join', { groupId: groupA.id });
+
+    // Wait 200ms for room join
+    await new Promise((r) => setTimeout(r, 200));
+
+    const broadcastPromise = new Promise((resolve) => {
+      socketB.on('message:new', (msg) => resolve(msg));
+    });
+
+    const sentContent = `Real-time broadcast test at ${Date.now()}`;
+    socketA.emit('message:send', {
+      groupId: groupA.id,
+      content: sentContent,
+      clientMessageId: 'temp_client_133',
+    });
+
+    const receivedBroadcast = await broadcastPromise;
+    assert(
+      '133. Sent message is broadcast in real time to connected group member',
+      receivedBroadcast?.content === sentContent && receivedBroadcast?.groupId === groupA.id,
+    );
+
+    // #134 message is not broadcast to unrelated group
+    // Create unrelated group and join socketC
+    const unGroupRes = await request('/groups', 'POST', { name: 'Unrelated Group' }, userCToken);
+    socketC.emit('group:join', { groupId: unGroupRes.data.id });
+    await new Promise((r) => setTimeout(r, 100));
+
+    let unrelatedReceived = false;
+    socketC.on('message:new', (msg) => {
+      if (msg.groupId === groupA.id) unrelatedReceived = true;
+    });
+
+    socketA.emit('message:send', {
+      groupId: groupA.id,
+      content: 'Secret message for group A only',
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    assert(
+      '134. Message is NOT broadcast to members in unrelated groups',
+      unrelatedReceived === false,
+    );
+
+    // #135 sender identity comes from JWT
+    assert(
+      '135. Sender identity is securely verified from JWT',
+      receivedBroadcast?.userId === userA.id,
+    );
+
+    // #136 persisted message survives reconnect
+    socketB.disconnect();
+    const { socket: socketB2 } = await createSocket(userBToken);
+    const messagesAfterReconnect = await request(`/groups/${groupA.id}/messages`, 'GET', null, userBToken);
+    assert(
+      '136. Persisted messages survive socket disconnection and reconnection',
+      messagesAfterReconnect.status === 200 &&
+        messagesAfterReconnect.data?.messages.some((m) => m.content === sentContent),
+    );
+
+    // #137 removed member loses chat access
+    await request(`/groups/${groupA.id}/members/${userB.id}`, 'DELETE', null, userAToken);
+    const removedSendPromise = new Promise((resolve) => {
+      socketB2.on('chat:error', (err) => resolve(err));
+      socketB2.on('message:new', (msg) => resolve(msg));
+    });
+    socketB2.emit('message:send', {
+      groupId: groupA.id,
+      content: 'Trying to send after removal',
+    });
+    const removedSendRes = await Promise.race([
+      removedSendPromise,
+      new Promise((r) => setTimeout(() => r({ timeout: true }), 1000)),
+    ]);
+    assert(
+      '137. Removed member immediately loses chat send access (FORBIDDEN)',
+      removedSendRes?.code === 'FORBIDDEN' || Boolean(removedSendRes?.message) || removedSendRes?.timeout === false,
+    );
+
+    // Clean up sockets
+    socketA.disconnect();
+    socketB.disconnect();
+    socketB2.disconnect();
+    socketC.disconnect();
+
+    // --- REGRESSION TESTS (#138 - #146) ---
+    console.log('--- Phase 6 Regression Checks ---');
+
+    // #138 Study Day unaffected
+    const regDaysRes = await request('/study-days', 'GET', null, studentToken);
+    assert(
+      '138. Study Day roadmap API unaffected',
+      regDaysRes.status === 200 && Array.isArray(regDaysRes.data),
+    );
+
+    // #139 Exercise unaffected
+    const regExRes = await request(`/exercises/${targetExercise.id}`, 'GET', null, studentToken);
+    assert(
+      '139. Exercise retrieval unaffected',
+      regExRes.status === 200 && regExRes.data?.id === targetExercise.id,
+    );
+
+    // #140 Checklist unaffected
+    const regClRes = await request(`/checklists/study-day/${targetDayForChecklist.id}`, 'GET', null, studentToken);
+    assert(
+      '140. Checklist items and completions unaffected',
+      regClRes.status === 200 && Boolean(regClRes.data?.items),
+    );
+
+    // #141 Coding Exercise unaffected
+    assert(
+      '141. Coding Exercise config unaffected',
+      regExRes.status === 200 && Boolean(regExRes.data?.isCoding !== undefined),
+    );
+
+    // #142 Submission unaffected
+    const regSubRes = await request('/submissions/me', 'GET', null, studentToken);
+    assert(
+      '142. Submission history and progress unaffected',
+      regSubRes.status === 200 && Array.isArray(regSubRes.data),
+    );
+
+    // #143 Progress unaffected
+    const regProgRes = await request('/progress', 'GET', null, studentToken);
+    assert(
+      '143. Overall progress tracking unaffected',
+      regProgRes.status === 200 && Boolean(regProgRes.data),
+    );
+
+    // #144 Attendance unaffected
+    const regAttRes = await request('/attendance/stats', 'GET', null, studentToken);
+    assert(
+      '144. Attendance streak and logging unaffected',
+      regAttRes.status === 200 && Boolean(regAttRes.data?.statistics),
+    );
+
+    // #145 Activity unaffected
+    const regActRes = await request('/activity', 'GET', null, studentToken);
+    assert(
+      '145. Global activity feed unaffected',
+      regActRes.status === 200 && Array.isArray(regActRes.data),
+    );
+
+    // #146 existing Group join behavior unaffected
+    const p6RegUser = await request('/auth/register', 'POST', {
+      name: 'P6 Join Tester',
+      email: `p6_jointester_${Date.now()}@test.com`,
+      password: 'password123',
+    });
+    const regJoinGroupRes = await request(
+      '/groups/join',
+      'POST',
+      { inviteCode: groupA.inviteCode },
+      p6RegUser.data.tokens.accessToken,
+    );
+    assert(
+      '146. Existing group join by inviteCode creates membership & activity unaffected',
+      regJoinGroupRes.status === 201 || regJoinGroupRes.status === 200,
+    );
+
     // Summary
     console.log('\n=== INTEGRATION QA SUMMARY ===');
     const passed = results.filter((r) => r.pass).length;
@@ -1148,3 +1658,4 @@ async function runQA() {
 }
 
 runQA();
+

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Edit2, Trash2, CheckSquare, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, CheckSquare, ArrowUp, ArrowDown, BookOpen } from 'lucide-react';
 import { studyDaysApi } from '@/lib/api';
 import { StudyDay } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -215,15 +215,20 @@ export default function AdminStudyDaysPage() {
                     >
                       <ArrowDown className="w-3.5 h-3.5" />
                     </Button>
+                    <Link href={`/admin/study-days/${day.id}/content`}>
+                      <Button variant="outline" size="sm" className="px-2 py-1 text-xs border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/15">
+                        <BookOpen className="w-3.5 h-3.5 mr-1" /> Edit Lesson
+                      </Button>
+                    </Link>
                     <Link href={`/admin/checklists?studyDayId=${day.id}`}>
-                      <Button variant="outline" size="sm" className="px-2 py-1 text-xs border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10">
+                      <Button variant="outline" size="sm" className="px-2 py-1 text-xs border-slate-700 text-slate-300 hover:bg-slate-800">
                         <CheckSquare className="w-3.5 h-3.5 mr-1" /> Checklist
                       </Button>
                     </Link>
-                    <Button onClick={() => openEditModal(day)} variant="outline" size="sm" className="px-2 py-1">
+                    <Button onClick={() => openEditModal(day)} variant="outline" size="sm" className="px-2 py-1" title="Edit Metadata">
                       <Edit2 className="w-3.5 h-3.5" />
                     </Button>
-                    <Button onClick={() => handleDelete(day.id, day.title)} variant="danger" size="sm" className="px-2 py-1">
+                    <Button onClick={() => handleDelete(day.id, day.title)} variant="danger" size="sm" className="px-2 py-1" title="Delete Study Day">
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </td>

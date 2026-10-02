@@ -1761,6 +1761,89 @@ async function runQA() {
       unauthDashboardRes.status === 401,
     );
 
+    // ==========================================
+    // PHASE 8: LESSON CONTENT & ADMIN EDITOR QA (#159 - #164)
+    // ==========================================
+    console.log('\n--- PHASE 8: LESSON CONTENT & ADMIN EDITOR QA (#159 - #164) ---');
+
+    // #159 Student retrieves structured Study Day lesson content
+    const studentDayContentRes = await request(`/study-days/${firstDay.id}`, 'GET', null, studentToken);
+    assert(
+      '159. Student retrieves structured Study Day lesson content',
+      studentDayContentRes.status === 200 && typeof studentDayContentRes.data?.content === 'string',
+    );
+
+    // #160 Admin updates Study Day lesson content
+    const testLessonMarkdown = `# Day ${firstDay.dayNumber}: ${firstDay.title}
+
+## Learning Goals
+- Understand primitive types and typeof
+- Practice code with interactive editor
+
+> [!TIP] Pro Tip
+> Keep functions small and deterministic.
+
+\`\`\`javascript
+const greeting = "Hello JS Study Hub";
+console.log(greeting);
+\`\`\`
+
+## Core Concepts
+Detailed concepts and explanations.`;
+
+    const adminUpdateContentRes = await request(
+      `/study-days/${firstDay.id}`,
+      'PATCH',
+      { content: testLessonMarkdown },
+      adminToken,
+    );
+    assert(
+      '160. Admin updates Study Day lesson content successfully',
+      adminUpdateContentRes.status === 200 &&
+        adminUpdateContentRes.data?.content.includes('> [!TIP] Pro Tip'),
+    );
+
+    // #161 Updated lesson content persists and is returned to Student
+    const studentDayAfterUpdate = await request(`/study-days/${firstDay.id}`, 'GET', null, studentToken);
+    assert(
+      '161. Updated lesson content persists and is visible to Student',
+      studentDayAfterUpdate.status === 200 &&
+        studentDayAfterUpdate.data?.content.includes('> [!TIP] Pro Tip'),
+    );
+
+    // #162 Student receives 403 Forbidden for lesson content update
+    const studentUpdateAttempt = await request(
+      `/study-days/${firstDay.id}`,
+      'PATCH',
+      { content: 'Hacked content' },
+      studentToken,
+    );
+    assert(
+      '162. Student receives 403 Forbidden when attempting to update lesson content',
+      studentUpdateAttempt.status === 403,
+    );
+
+    // #163 Unauthenticated request receives 401 Unauthorized
+    const unauthUpdateAttempt = await request(
+      `/study-days/${firstDay.id}`,
+      'PATCH',
+      { content: 'Unauthenticated content' },
+      null,
+    );
+    assert(
+      '163. Unauthenticated request receives 401 Unauthorized for lesson content update',
+      unauthUpdateAttempt.status === 401,
+    );
+
+    // #164 Frontend Markdown parser and renderer components exist and pass validation
+    const rendererPath = path.resolve(__dirname, '../frontend/components/lessons/lesson-content-renderer.tsx');
+    const editorPath = path.resolve(__dirname, '../frontend/components/lessons/admin-lesson-editor.tsx');
+    const parserPath = path.resolve(__dirname, '../frontend/lib/markdown-parser.ts');
+    assert(
+      '164. Frontend Lesson Content Renderer, Admin Editor, and Markdown parser exist and are defined',
+      fs.existsSync(rendererPath) && fs.existsSync(editorPath) && fs.existsSync(parserPath),
+    );
+
     // Summary
     console.log('\n=== INTEGRATION QA SUMMARY ===');
     const passed = results.filter((r) => r.pass).length;

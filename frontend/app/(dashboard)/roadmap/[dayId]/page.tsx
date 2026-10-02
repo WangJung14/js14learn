@@ -2,14 +2,15 @@
 
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, BookOpen, Code2, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
+import { ArrowLeft, Code2, ArrowRight } from 'lucide-react';
 import { studyDaysApi, attendanceApi } from '@/lib/api';
 import { StudyDay } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudyDayChecklist } from '@/components/checklists/study-day-checklist';
+import { LessonContentRenderer } from '@/components/lessons/lesson-content-renderer';
 
 export default function StudyDayDetailPage({ params }: { params: Promise<{ dayId: string }> }) {
   const { dayId } = use(params);
@@ -79,18 +80,13 @@ export default function StudyDayDetailPage({ params }: { params: Promise<{ dayId
         <p className="text-sm text-slate-400 leading-relaxed">{day.description}</p>
       </div>
 
-      {/* Lesson Content Viewer */}
-      <Card className="border-slate-800">
-        <CardHeader className="flex flex-row items-center space-x-3 border-b border-slate-800/80 pb-4">
-          <BookOpen className="w-5 h-5 text-indigo-400" />
-          <CardTitle className="text-lg">Lesson Content & Objectives</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed whitespace-pre-line font-sans">
-            {day.content}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Rich Interactive Lesson Content Document */}
+      <LessonContentRenderer
+        content={day.content}
+        title={day.title}
+        dayNumber={day.dayNumber}
+        showTocSidebar={true}
+      />
 
       {/* Study Checklist Section */}
       <StudyDayChecklist studyDayId={dayId} />

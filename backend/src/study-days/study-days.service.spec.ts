@@ -177,10 +177,33 @@ describe('StudyDaysService - Admin Study Day Reordering', () => {
   });
 
   it('10. Existing Study Day data (title, content, dayNumber) remains unchanged', async () => {
-    prismaService.studyDay.findUnique.mockResolvedValue(mockDays[0]);
+    prismaService.studyDay.findUnique.mockResolvedValue({
+      ...mockDays[0],
+      content:
+        '# Day 1 Lesson\n\n## Learning Goals\n- Understand JavaScript types',
+    });
 
     const result = await service.findOne('day-1');
     expect(result.dayNumber).toBe(1);
     expect(result.title).toBe('Day 1');
+    expect(result.content).toContain('Learning Goals');
+  });
+
+  it('11. Admin updates lesson content successfully', async () => {
+    prismaService.studyDay.findUnique.mockResolvedValue(mockDays[0]);
+    prismaService.studyDay.update.mockResolvedValue({
+      ...mockDays[0],
+      content: '# Updated Lesson\n\n## Section 1\nContent',
+    });
+
+    const updated = await service.update('day-1', {
+      content: '# Updated Lesson\n\n## Section 1\nContent',
+    });
+
+    expect(prismaService.studyDay.update).toHaveBeenCalledWith({
+      where: { id: 'day-1' },
+      data: { content: '# Updated Lesson\n\n## Section 1\nContent' },
+    });
+    expect(updated.content).toContain('Updated Lesson');
   });
 });

@@ -139,6 +139,165 @@ export interface CodingExerciseConfig {
   tests: CodingTestCase[];
 }
 
+export type AssessmentType = 'NONE' | 'CODE_OUTPUT' | 'ESSAY' | 'MULTIPLE_CHOICE';
+
+export type QuestionStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+
+export type AttemptStatus =
+  | 'SUBMITTED'
+  | 'GRADED'
+  | 'PENDING_REVIEW'
+  | 'PASSED'
+  | 'FAILED';
+
+export interface MultipleChoiceOption {
+  id: string;
+  text: string;
+  isCorrect?: boolean;
+}
+
+export interface CodeOutputConfig {
+  codeSnippet?: string;
+  expectedOutput?: string;
+  normalizationMode?: 'NORMALIZED' | 'STRICT';
+  points?: number;
+  passingScore?: number;
+  maxAttempts?: number;
+  explanation?: string;
+}
+
+export interface EssayConfig {
+  gradingMode?: 'EXACT' | 'KEYWORDS' | 'MANUAL';
+  expectedAnswer?: string;
+  requiredKeywords?: string[];
+  keywords?: string[];
+  minLength?: number;
+  maxLength?: number;
+  rubric?: string;
+  points?: number;
+  passingScore?: number;
+  maxAttempts?: number;
+  explanation?: string;
+}
+
+export interface MultipleChoiceConfig {
+  choices?: MultipleChoiceOption[];
+  options?: MultipleChoiceOption[];
+  correctOptionId?: string;
+  points?: number;
+  passingScore?: number;
+  maxAttempts?: number;
+  explanation?: string;
+}
+
+export type AssessmentConfig = CodeOutputConfig & EssayConfig & MultipleChoiceConfig;
+
+export interface Question {
+  id: string;
+  type: AssessmentType;
+  title: string;
+  description?: string | null;
+  difficulty: ExerciseDifficulty;
+  status: QuestionStatus;
+  explanation?: string | null;
+  defaultPoints: number;
+  points?: number;
+  order?: number;
+  isRequired?: boolean;
+  exerciseQuestionId?: string;
+  config: any;
+  createdById?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  _count?: {
+    exerciseQuestions?: number;
+    assessmentAnswers?: number;
+  };
+  exerciseQuestions?: Array<{
+    id: string;
+    exerciseId: string;
+    order: number;
+    points?: number | null;
+    isRequired: boolean;
+    exercise?: {
+      id: string;
+      title: string;
+      studyDayId?: string;
+    };
+  }>;
+}
+
+export interface AssessmentAnswer {
+  id: string;
+  attemptId: string;
+  questionId: string;
+  studentAnswer?: string | null;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  isCorrect: boolean;
+  status: AttemptStatus;
+  feedback?: string | null;
+  adminFeedback?: string | null;
+  gradedAt?: string | null;
+  question?: {
+    id: string;
+    title: string;
+    type: AssessmentType;
+    explanation?: string | null;
+    config?: any;
+  };
+}
+
+export interface AssessmentAttempt {
+  id: string;
+  userId: string;
+  exerciseId: string;
+  attemptNumber: number;
+  status: AttemptStatus;
+  score: number;
+  totalPoints: number;
+  percentage: number;
+  isPassed: boolean;
+  studentAnswer?: string | null;
+  userAnswer?: unknown;
+  feedback?: string | null;
+  adminFeedback?: string | null;
+  explanation?: string | null;
+  submittedAt: string;
+  gradedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  answers?: AssessmentAnswer[];
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+  };
+  exercise?: {
+    id: string;
+    title: string;
+    assessmentType?: AssessmentType;
+    studyDayId?: string;
+    passingScore?: number;
+  };
+}
+
+export interface AssessmentSummary {
+  bestScore: number;
+  latestScore?: number;
+  bestPercentage: number;
+  latestPercentage?: number;
+  totalAttempts: number;
+  maxAttempts?: number | null;
+  passingScore?: number;
+  isPassed: boolean;
+  hasPendingReview?: boolean;
+  latestAttempt: AssessmentAttempt | null;
+  attempts?: AssessmentAttempt[];
+}
+
 export interface Exercise {
   id: string;
   studyDayId: string;
@@ -149,6 +308,13 @@ export interface Exercise {
   isCoding?: boolean;
   starterCode?: string | null;
   codingConfig?: CodingExerciseConfig | unknown;
+  assessmentType?: AssessmentType;
+  assessmentConfig?: AssessmentConfig | unknown;
+  passingScore?: number;
+  maxAttempts?: number | null;
+  questions?: Question[];
+  totalQuestions?: number;
+  totalPoints?: number;
   createdAt: string;
   updatedAt: string;
   studyDay?: {
@@ -158,6 +324,7 @@ export interface Exercise {
   };
   latestSubmission?: Submission | null;
   submissionStatus?: SubmissionStatus | null;
+  latestAttempt?: AssessmentAttempt | null;
 }
 
 export interface Submission {

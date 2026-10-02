@@ -20,6 +20,8 @@ import { StorageModule } from './storage/storage.module';
 import { ChecklistsModule } from './checklists/checklists.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { RoadmapValidationModule } from './roadmap-validation/roadmap-validation.module';
+import { AssessmentsModule } from './assessments/assessments.module';
+import { QuestionsModule } from './questions/questions.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 @Module({
@@ -34,6 +36,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     UsersModule,
     StudyDaysModule,
     ExercisesModule,
+    AssessmentsModule,
+    QuestionsModule,
     SubmissionsModule,
     ProgressModule,
     GroupsModule,

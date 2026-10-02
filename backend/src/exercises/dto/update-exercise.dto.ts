@@ -4,9 +4,11 @@ import {
   IsOptional,
   IsString,
   IsBoolean,
+  IsNumber,
+  IsArray,
   Min,
 } from 'class-validator';
-import { ExerciseDifficulty } from '@prisma/client';
+import { ExerciseDifficulty, AssessmentType } from '@prisma/client';
 
 export class UpdateExerciseDto {
   @IsOptional()
@@ -36,4 +38,34 @@ export class UpdateExerciseDto {
 
   @IsOptional()
   codingConfig?: any;
+
+  @IsOptional()
+  @IsEnum(AssessmentType)
+  assessmentType?: AssessmentType;
+
+  @IsOptional()
+  assessmentConfig?: any;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  passingScore?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxAttempts?: number;
+
+  @IsOptional()
+  @IsArray()
+  questionIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  questions?: Array<{
+    questionId: string;
+    points?: number;
+    order?: number;
+    isRequired?: boolean;
+  }>;
 }

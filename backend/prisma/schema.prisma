@@ -50,6 +50,27 @@ enum ChecklistItemType {
   CUSTOM
 }
 
+enum AssessmentType {
+  NONE
+  CODE_OUTPUT
+  ESSAY
+  MULTIPLE_CHOICE
+}
+
+enum AttemptStatus {
+  SUBMITTED
+  GRADED
+  PENDING_REVIEW
+  PASSED
+  FAILED
+}
+
+enum QuestionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 model RoadmapSetting {
   id          String        @id @default("global")
   status      RoadmapStatus @default(PUBLISHED)
@@ -76,6 +97,8 @@ model User {
   activities           Activity[]
   checklistCompletions ChecklistCompletion[]
   attendances          Attendance[]
+  assessmentAttempts   AssessmentAttempt[]
+  createdQuestions     Question[]            @relation("QuestionCreator")
 }
 
 model Group {
@@ -140,23 +163,124 @@ model StudyDay {
 }
 
 model Exercise {
-  id          String             @id @default(uuid())
-  studyDayId  String
-  title       String
-  description String
-  difficulty  ExerciseDifficulty @default(EASY)
-  order       Int
-  isCoding    Boolean            @default(false)
-  starterCode String?
-  codingConfig Json?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id               String             @id @default(uuid())
+  studyDayId       String
+  title            String
+  description      String
+  difficulty       ExerciseDifficulty @default(EASY)
+  order            Int
+  isCoding         Boolean            @default(false)
+  starterCode      String?
+  codingConfig     Json?
+  assessmentType   AssessmentType     @default(NONE)
+  assessmentConfig Json?
+  passingScore     Float?             @default(70)
+  maxAttempts      Int?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
-  studyDay       StudyDay        @relation(fields: [studyDayId], references: [id], onDelete: Cascade)
-  submissions    Submission[]
-  checklistItems ChecklistItem[]
+  studyDay           StudyDay            @relation(fields: [studyDayId], references: [id], onDelete: Cascade)
+  submissions        Submission[]
+  checklistItems     ChecklistItem[]
+  assessmentAttempts AssessmentAttempt[]
+  exerciseQuestions  ExerciseQuestion[]
 
   @@index([studyDayId])
+}
+
+model Question {
+  id            String             @id @default(uuid())
+  type          AssessmentType
+  title         String
+  description   String?
+  difficulty    ExerciseDifficulty @default(EASY)
+  status        QuestionStatus     @default(DRAFT)
+  explanation   String?
+  defaultPoints Float              @default(10)
+  config        Json
+  createdById   String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  createdBy         User?              @relation("QuestionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  exerciseQuestions ExerciseQuestion[]
+  assessmentAnswers AssessmentAnswer[]
+
+  @@index([type])
+  @@index([status])
+  @@index([difficulty])
+  @@index([createdById])
+}
+
+model ExerciseQuestion {
+  id         String   @id @default(uuid())
+  exerciseId String
+  questionId String
+  order      Int      @default(0)
+  points     Float?
+  isRequired Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([exerciseId, questionId])
+  @@index([exerciseId])
+  @@index([questionId])
+  @@index([exerciseId, order])
+}
+
+model AssessmentAttempt {
+  id            String             @id @default(uuid())
+  userId        String
+  exerciseId    String
+  attemptNumber Int
+  status        AttemptStatus      @default(SUBMITTED)
+  score         Float              @default(0)
+  totalPoints   Float              @default(10)
+  percentage    Float              @default(0)
+  isPassed      Boolean            @default(false)
+  studentAnswer String?
+  feedback      String?
+  adminFeedback String?
+  submittedAt   DateTime           @default(now())
+  gradedAt      DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise Exercise           @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  answers  AssessmentAnswer[]
+
+  @@index([userId])
+  @@index([exerciseId])
+  @@index([userId, exerciseId])
+  @@index([createdAt])
+}
+
+model AssessmentAnswer {
+  id            String        @id @default(uuid())
+  attemptId     String
+  questionId    String
+  studentAnswer String?
+  score         Float         @default(0)
+  maxScore      Float         @default(0)
+  percentage    Float         @default(0)
+  isCorrect     Boolean       @default(false)
+  status        AttemptStatus @default(SUBMITTED)
+  feedback      String?
+  adminFeedback String?
+  gradedAt      DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  attempt  AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question          @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
 }
 
 model Submission {

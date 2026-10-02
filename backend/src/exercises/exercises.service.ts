@@ -8,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { UpdateExerciseDto } from './dto/update-exercise.dto';
 import { ReorderExercisesDto } from './dto/reorder-exercises.dto';
-import { Role } from '@prisma/client';
+import { Role, AssessmentType, QuestionStatus } from '@prisma/client';
 
 @Injectable()
 export class ExercisesService {
@@ -33,18 +33,107 @@ export class ExercisesService {
     }
   }
 
+  private sanitizeAssessmentConfig(config: any): any {
+    if (!config || typeof config !== 'object') return null;
+    const sanitized = { ...config };
+    delete sanitized.expectedOutput;
+    delete sanitized.expectedAnswer;
+    delete sanitized.requiredKeywords;
+    delete sanitized.rubric;
+    delete sanitized.correctOptionId;
+    if (Array.isArray(sanitized.choices)) {
+      sanitized.choices = sanitized.choices.map((c: any) => {
+        const choiceCopy = { ...c };
+        delete choiceCopy.isCorrect;
+        return choiceCopy;
+      });
+    }
+    return sanitized;
+  }
+
+  private sanitizeQuestion(
+    question: any,
+    pointsOverride?: number | null,
+    isAdmin = false,
+  ): any {
+    if (!question) return null;
+
+    const points =
+      pointsOverride !== undefined && pointsOverride !== null
+        ? pointsOverride
+        : (question.defaultPoints ?? 10);
+
+    const rawConfig = question.config || {};
+    const sanitizedConfig = { ...rawConfig };
+
+    if (!isAdmin) {
+      if (question.type === AssessmentType.CODE_OUTPUT) {
+        delete sanitizedConfig.expectedOutput;
+      } else if (question.type === AssessmentType.MULTIPLE_CHOICE) {
+        delete sanitizedConfig.correctOptionId;
+        const choices = Array.isArray(sanitizedConfig.choices)
+          ? sanitizedConfig.choices
+          : Array.isArray(sanitizedConfig.options)
+            ? sanitizedConfig.options
+            : [];
+        sanitizedConfig.choices = choices.map((c: any) => {
+          const copy = { ...c };
+          delete copy.isCorrect;
+          return copy;
+        });
+        delete sanitizedConfig.options;
+      } else if (question.type === AssessmentType.ESSAY) {
+        delete sanitizedConfig.expectedAnswer;
+        delete sanitizedConfig.keywords;
+        delete sanitizedConfig.requiredKeywords;
+        delete sanitizedConfig.rubric;
+      }
+    }
+
+    return {
+      id: question.id,
+      type: question.type,
+      title: question.title,
+      description: question.description,
+      difficulty: question.difficulty,
+      status: question.status,
+      points,
+      defaultPoints: question.defaultPoints,
+      explanation: isAdmin ? question.explanation : undefined,
+      config: sanitizedConfig,
+    };
+  }
+
   async findOne(id: string, userId?: string) {
     await this.checkStudentVisibility(userId);
+    let isAdmin = false;
+    if (userId) {
+      const user = await (this.prisma.user?.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      }) ?? null);
+      isAdmin = user?.role === Role.ADMIN;
+    }
+
     const exercise = await this.prisma.exercise.findUnique({
       where: { id },
       include: {
         studyDay: {
           select: { id: true, dayNumber: true, title: true },
         },
+        exerciseQuestions: {
+          include: { question: true },
+          orderBy: { order: 'asc' },
+        },
         ...(userId && {
           submissions: {
             where: { userId },
             orderBy: { submittedAt: 'desc' },
+          },
+          assessmentAttempts: {
+            where: { userId },
+            orderBy: { attemptNumber: 'desc' },
+            take: 5,
           },
         }),
       },
@@ -54,11 +143,28 @@ export class ExercisesService {
       throw new NotFoundException(`Exercise with ID ${id} not found`);
     }
 
-    const exData = exercise;
+    const exData = exercise as any;
     const latestSubmission =
       exData.submissions && exData.submissions.length > 0
         ? exData.submissions[0]
         : null;
+
+    const latestAttempt =
+      exData.assessmentAttempts && exData.assessmentAttempts.length > 0
+        ? exData.assessmentAttempts[0]
+        : null;
+
+    const rawConfig = exercise.assessmentConfig;
+    const assessmentConfig = isAdmin
+      ? rawConfig
+      : this.sanitizeAssessmentConfig(rawConfig);
+
+    const questions = (exercise.exerciseQuestions || []).map((eq) => ({
+      ...this.sanitizeQuestion(eq.question, eq.points, isAdmin),
+      order: eq.order,
+      isRequired: eq.isRequired,
+      exerciseQuestionId: eq.id,
+    }));
 
     return {
       id: exercise.id,
@@ -70,24 +176,50 @@ export class ExercisesService {
       isCoding: exercise.isCoding,
       starterCode: exercise.starterCode,
       codingConfig: exercise.codingConfig,
+      assessmentType: exercise.assessmentType,
+      assessmentConfig,
+      passingScore: exercise.passingScore ?? 70,
+      maxAttempts: exercise.maxAttempts ?? null,
+      questions,
+      totalQuestions: questions.length,
+      totalPoints: questions.reduce((sum, q) => sum + (q.points || 0), 0),
       createdAt: exercise.createdAt,
       updatedAt: exercise.updatedAt,
       studyDay: exercise.studyDay,
       latestSubmission,
       submissionStatus: latestSubmission ? latestSubmission.status : null,
+      latestAttempt,
     };
   }
 
   async findByStudyDay(studyDayId: string, userId?: string) {
     await this.checkStudentVisibility(userId);
+    let isAdmin = false;
+    if (userId) {
+      const user = await (this.prisma.user?.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      }) ?? null);
+      isAdmin = user?.role === Role.ADMIN;
+    }
+
     const exercises = await this.prisma.exercise.findMany({
       where: { studyDayId },
       orderBy: { order: 'asc' },
       include: {
+        exerciseQuestions: {
+          include: { question: true },
+          orderBy: { order: 'asc' },
+        },
         ...(userId && {
           submissions: {
             where: { userId },
             orderBy: { submittedAt: 'desc' },
+            take: 1,
+          },
+          assessmentAttempts: {
+            where: { userId },
+            orderBy: { attemptNumber: 'desc' },
             take: 1,
           },
         }),
@@ -95,11 +227,28 @@ export class ExercisesService {
     });
 
     return exercises.map((ex) => {
-      const exData = ex;
+      const exData = ex as any;
       const latestSubmission =
         exData.submissions && exData.submissions.length > 0
           ? exData.submissions[0]
           : null;
+
+      const latestAttempt =
+        exData.assessmentAttempts && exData.assessmentAttempts.length > 0
+          ? exData.assessmentAttempts[0]
+          : null;
+
+      const rawConfig = ex.assessmentConfig;
+      const assessmentConfig = isAdmin
+        ? rawConfig
+        : this.sanitizeAssessmentConfig(rawConfig);
+
+      const questions = (ex.exerciseQuestions || []).map((eq: any) => ({
+        ...this.sanitizeQuestion(eq.question, eq.points, isAdmin),
+        order: eq.order,
+        isRequired: eq.isRequired,
+        exerciseQuestionId: eq.id,
+      }));
 
       return {
         id: ex.id,
@@ -111,10 +260,21 @@ export class ExercisesService {
         isCoding: ex.isCoding,
         starterCode: ex.starterCode,
         codingConfig: ex.codingConfig,
+        assessmentType: ex.assessmentType,
+        assessmentConfig,
+        passingScore: ex.passingScore ?? 70,
+        maxAttempts: ex.maxAttempts ?? null,
+        questions,
+        totalQuestions: questions.length,
+        totalPoints: questions.reduce(
+          (sum: number, q: any) => sum + (q.points || 0),
+          0,
+        ),
         createdAt: ex.createdAt,
         updatedAt: ex.updatedAt,
         latestSubmission,
         submissionStatus: latestSubmission ? latestSubmission.status : null,
+        latestAttempt,
       };
     });
   }
@@ -176,9 +336,85 @@ export class ExercisesService {
       dto.codingConfig as Record<string, unknown> | null,
     );
 
-    return this.prisma.exercise.create({
-      data: dto,
+    const { questions, questionIds, ...exerciseData } = dto;
+
+    const exercise = await this.prisma.exercise.create({
+      data: exerciseData,
     });
+
+    // If question objects or IDs provided, link them
+    if (Array.isArray(questions) && questions.length > 0) {
+      let orderIndex = 1;
+      for (const item of questions) {
+        const q = await this.prisma.question.findUnique({
+          where: { id: item.questionId },
+        });
+        if (q) {
+          await this.prisma.exerciseQuestion.create({
+            data: {
+              exerciseId: exercise.id,
+              questionId: q.id,
+              order: item.order !== undefined ? item.order : orderIndex++,
+              points: item.points !== undefined ? item.points : q.defaultPoints,
+              isRequired:
+                item.isRequired !== undefined ? item.isRequired : true,
+            },
+          });
+        }
+      }
+    } else if (Array.isArray(questionIds) && questionIds.length > 0) {
+      let orderIndex = 1;
+      for (const qId of questionIds) {
+        const q = await this.prisma.question.findUnique({
+          where: { id: qId },
+        });
+        if (q) {
+          await this.prisma.exerciseQuestion.create({
+            data: {
+              exerciseId: exercise.id,
+              questionId: q.id,
+              order: orderIndex++,
+              points: q.defaultPoints,
+              isRequired: true,
+            },
+          });
+        }
+      }
+    } else if (
+      dto.assessmentType &&
+      dto.assessmentType !== AssessmentType.NONE &&
+      dto.assessmentConfig
+    ) {
+      // Legacy single-question payload auto-link
+      const qConfig = dto.assessmentConfig;
+      const defaultPoints =
+        typeof qConfig.points === 'number' ? qConfig.points : 10;
+
+      const question = await this.prisma.question.create({
+        data: {
+          type: dto.assessmentType,
+          title: dto.title,
+          description: dto.description,
+          difficulty: dto.difficulty,
+          status: QuestionStatus.PUBLISHED,
+          explanation: qConfig.explanation || null,
+          defaultPoints,
+          config: qConfig,
+        },
+      });
+
+      await this.prisma.exerciseQuestion.create({
+        data: {
+          exerciseId: exercise.id,
+          questionId: question.id,
+          order: 1,
+          points: defaultPoints,
+          isRequired: true,
+        },
+      });
+    }
+
+    return exercise;
   }
 
   async update(id: string, dto: UpdateExerciseDto) {
@@ -188,10 +424,59 @@ export class ExercisesService {
       dto.codingConfig as Record<string, unknown> | null,
     );
 
-    return this.prisma.exercise.update({
+    const { questions, questionIds, ...exerciseData } = dto;
+
+    await this.prisma.exercise.update({
       where: { id },
-      data: dto,
+      data: exerciseData,
     });
+
+    if (Array.isArray(questions)) {
+      await this.prisma.exerciseQuestion.deleteMany({
+        where: { exerciseId: id },
+      });
+      let orderIndex = 1;
+      for (const item of questions) {
+        const q = await this.prisma.question.findUnique({
+          where: { id: item.questionId },
+        });
+        if (q) {
+          await this.prisma.exerciseQuestion.create({
+            data: {
+              exerciseId: id,
+              questionId: q.id,
+              order: item.order !== undefined ? item.order : orderIndex++,
+              points: item.points !== undefined ? item.points : q.defaultPoints,
+              isRequired:
+                item.isRequired !== undefined ? item.isRequired : true,
+            },
+          });
+        }
+      }
+    } else if (Array.isArray(questionIds)) {
+      await this.prisma.exerciseQuestion.deleteMany({
+        where: { exerciseId: id },
+      });
+      let orderIndex = 1;
+      for (const qId of questionIds) {
+        const q = await this.prisma.question.findUnique({
+          where: { id: qId },
+        });
+        if (q) {
+          await this.prisma.exerciseQuestion.create({
+            data: {
+              exerciseId: id,
+              questionId: q.id,
+              order: orderIndex++,
+              points: q.defaultPoints,
+              isRequired: true,
+            },
+          });
+        }
+      }
+    }
+
+    return this.findOne(id);
   }
 
   async remove(id: string) {

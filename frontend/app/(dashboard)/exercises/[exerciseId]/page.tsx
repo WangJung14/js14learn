@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/utils';
 import { CodingWorkspace } from '@/components/code-editor/coding-workspace';
+import { AssessmentWorkspace } from '@/components/assessments/assessment-workspace';
 
 export default function ExerciseDetailPage({ params }: { params: Promise<{ exerciseId: string }> }) {
   const { exerciseId } = use(params);
@@ -116,6 +117,12 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
 
   if (!exercise) return null;
 
+  const isAssessment =
+    (exercise.questions && exercise.questions.length > 0) ||
+    (exercise.assessmentType && exercise.assessmentType !== 'NONE');
+
+  const questionCount = exercise.totalQuestions || exercise.questions?.length || 1;
+
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
       {/* Back Navigation */}
@@ -125,7 +132,9 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
           className="inline-flex items-center space-x-2 text-xs font-semibold text-slate-400 hover:text-indigo-400 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Day {exercise.studyDay.dayNumber}: {exercise.studyDay.title}</span>
+          <span>
+            Back to Day {exercise.studyDay.dayNumber}: {exercise.studyDay.title}
+          </span>
         </Link>
       )}
 
@@ -133,18 +142,34 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
       <div className="space-y-3 border-b border-slate-800 pb-6">
         <div className="flex items-center space-x-3">
           <Badge variant={exercise.difficulty} />
-          {exercise.submissionStatus && <Badge variant={exercise.submissionStatus} />}
-          {exercise.isCoding && (
+          {exercise.submissionStatus && (
+            <Badge variant={exercise.submissionStatus} />
+          )}
+          {isAssessment && (
+            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              Assessment ({questionCount} Question{questionCount > 1 ? 's' : ''})
+            </span>
+          )}
+          {exercise.isCoding && !isAssessment && (
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
               Interactive Coding Exercise
             </span>
           )}
         </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-100">{exercise.title}</h1>
-        <p className="text-sm text-slate-400 leading-relaxed">{exercise.description}</p>
+        <h1 className="text-3xl font-extrabold tracking-tight text-slate-100">
+          {exercise.title}
+        </h1>
+        <p className="text-sm text-slate-400 leading-relaxed">
+          {exercise.description}
+        </p>
       </div>
 
-      {exercise.isCoding ? (
+      {isAssessment ? (
+        <AssessmentWorkspace
+          exercise={exercise}
+          onCompletion={loadExerciseData}
+        />
+      ) : exercise.isCoding ? (
         <div className="space-y-8">
           {/* Interactive Monaco & Worker Compiler */}
           <CodingWorkspace

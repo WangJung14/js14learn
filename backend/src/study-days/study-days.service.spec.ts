@@ -179,7 +179,8 @@ describe('StudyDaysService - Admin Study Day Reordering', () => {
   it('10. Existing Study Day data (title, content, dayNumber) remains unchanged', async () => {
     prismaService.studyDay.findUnique.mockResolvedValue({
       ...mockDays[0],
-      content: '# Day 1 Lesson\n\n## Learning Goals\n- Understand JavaScript types',
+      content:
+        '# Day 1 Lesson\n\n## Learning Goals\n- Understand JavaScript types',
     });
 
     const result = await service.findOne('day-1');

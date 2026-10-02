@@ -159,6 +159,16 @@ export const exercisesApi = {
     isCoding?: boolean;
     starterCode?: string;
     codingConfig?: unknown;
+    assessmentType?: string;
+    assessmentConfig?: unknown;
+    passingScore?: number;
+    maxAttempts?: number;
+    questions?: Array<{
+      questionId: string;
+      points?: number;
+      order?: number;
+      isRequired?: boolean;
+    }>;
   }): Promise<Exercise> {
     return apiClient<Exercise>('/exercises', {
       method: 'POST',
@@ -176,6 +186,17 @@ export const exercisesApi = {
       isCoding?: boolean;
       starterCode?: string;
       codingConfig?: unknown;
+      assessmentType?: string;
+      assessmentConfig?: unknown;
+      passingScore?: number;
+      maxAttempts?: number;
+      questionIds?: string[];
+      questions?: Array<{
+        questionId: string;
+        points?: number;
+        order?: number;
+        isRequired?: boolean;
+      }>;
     }>,
   ): Promise<Exercise> {
     return apiClient<Exercise>(`/exercises/${id}`, {
@@ -197,6 +218,174 @@ export const exercisesApi = {
     return apiClient<Exercise[]>('/admin/exercises/reorder', {
       method: 'PATCH',
       body: JSON.stringify({ studyDayId, items }),
+    });
+  },
+};
+
+export const questionsApi = {
+  async getAll(params?: {
+    search?: string;
+    type?: string;
+    difficulty?: string;
+    status?: string;
+  }): Promise<import('../../types').Question[]> {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.type && params.type !== 'ALL') query.append('type', params.type);
+    if (params?.difficulty && params.difficulty !== 'ALL')
+      query.append('difficulty', params.difficulty);
+    if (params?.status && params.status !== 'ALL')
+      query.append('status', params.status);
+
+    const queryString = query.toString();
+    return apiClient<import('../../types').Question[]>(
+      `/admin/questions${queryString ? `?${queryString}` : ''}`,
+    );
+  },
+
+  async getById(id: string): Promise<import('../../types').Question> {
+    return apiClient<import('../../types').Question>(`/admin/questions/${id}`);
+  },
+
+  async create(
+    data: Partial<import('../../types').Question>,
+  ): Promise<import('../../types').Question> {
+    return apiClient<import('../../types').Question>('/admin/questions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(
+    id: string,
+    data: Partial<import('../../types').Question>,
+  ): Promise<import('../../types').Question> {
+    return apiClient<import('../../types').Question>(`/admin/questions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async duplicate(id: string): Promise<import('../../types').Question> {
+    return apiClient<import('../../types').Question>(
+      `/admin/questions/${id}/duplicate`,
+      {
+        method: 'POST',
+      },
+    );
+  },
+
+  async archive(id: string): Promise<import('../../types').Question> {
+    return apiClient<import('../../types').Question>(
+      `/admin/questions/${id}/archive`,
+      {
+        method: 'POST',
+      },
+    );
+  },
+
+  async publish(id: string): Promise<import('../../types').Question> {
+    return apiClient<import('../../types').Question>(
+      `/admin/questions/${id}/publish`,
+      {
+        method: 'POST',
+      },
+    );
+  },
+
+  async delete(id: string): Promise<{ success: boolean }> {
+    return apiClient<{ success: boolean }>(`/admin/questions/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+export const assessmentsApi = {
+  async getAssessment(exerciseId: string): Promise<any> {
+    return apiClient<any>(`/assessments/${exerciseId}`);
+  },
+
+  async getAttempts(exerciseId: string): Promise<import('../../types').AssessmentAttempt[]> {
+    return apiClient<import('../../types').AssessmentAttempt[]>(`/assessments/${exerciseId}/attempts`);
+  },
+
+  async getSummary(exerciseId: string): Promise<import('../../types').AssessmentSummary> {
+    return apiClient<import('../../types').AssessmentSummary>(`/assessments/${exerciseId}/summary`);
+  },
+
+  async submitAttempt(
+    exerciseId: string,
+    data: {
+      answers?: Array<{ questionId: string; answer: unknown }>;
+      answer?: unknown;
+      studentAnswer?: string;
+    },
+  ): Promise<import('../../types').AssessmentAttempt> {
+    return apiClient<import('../../types').AssessmentAttempt>(`/assessments/${exerciseId}/attempts`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getPendingReviews(): Promise<import('../../types').AssessmentAttempt[]> {
+    return apiClient<import('../../types').AssessmentAttempt[]>('/admin/assessments/pending-reviews');
+  },
+
+  async reviewAttempt(
+    attemptId: string,
+    data: {
+      score?: number;
+      feedback?: string;
+      adminFeedback?: string;
+      isPassed?: boolean;
+      answers?: Array<{ answerId: string; score: number; feedback?: string }>;
+    },
+  ): Promise<import('../../types').AssessmentAttempt> {
+    return apiClient<import('../../types').AssessmentAttempt>(`/admin/assessments/attempts/${attemptId}/review`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async addQuestionsToExercise(
+    exerciseId: string,
+    questions: Array<{
+      questionId: string;
+      points?: number;
+      order?: number;
+      isRequired?: boolean;
+    }>,
+  ) {
+    return apiClient(`/admin/exercises/${exerciseId}/questions`, {
+      method: 'POST',
+      body: JSON.stringify({ questions }),
+    });
+  },
+
+  async removeQuestionFromExercise(exerciseId: string, questionId: string) {
+    return apiClient(`/admin/exercises/${exerciseId}/questions/${questionId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async reorderExerciseQuestions(
+    exerciseId: string,
+    orders: Array<{ questionId: string; order: number }>,
+  ) {
+    return apiClient(`/admin/exercises/${exerciseId}/questions/reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify({ orders }),
+    });
+  },
+
+  async updateExerciseQuestion(
+    exerciseId: string,
+    questionId: string,
+    data: { points?: number; order?: number; isRequired?: boolean },
+  ) {
+    return apiClient(`/admin/exercises/${exerciseId}/questions/${questionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     });
   },
 };

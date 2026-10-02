@@ -15,6 +15,7 @@ import {
   FileCheck,
   Clock,
   Sparkles,
+  HelpCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -42,6 +43,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     { name: 'Admin Overview', href: '/admin', icon: ShieldAlert },
     { name: 'Manage Roadmap', href: '/admin/study-days', icon: Map },
     { name: 'Manage Exercises', href: '/admin/exercises', icon: Code2 },
+    { name: 'Question Bank', href: '/admin/question-bank', icon: HelpCircle },
     { name: 'Review Submissions', href: '/admin/submissions', icon: FileCheck },
     { name: 'User Management', href: '/admin/users', icon: Users },
   ];

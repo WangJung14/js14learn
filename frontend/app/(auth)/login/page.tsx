@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Code2, ArrowRight, Lock, Mail } from 'lucide-react';
+import { Code2, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,7 +68,7 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 label="Email Address"
-                placeholder="tommy@jsstudyhub.local"
+                placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -91,35 +91,6 @@ export default function LoginPage() {
               Sign In <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </form>
-
-          {/* Seed Account Credentials Shortcut Banner for Demo Testing */}
-          <div className="pt-4 border-t border-slate-800/80 space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Quick Test Credentials:</p>
-            <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('tommy@jsstudyhub.local');
-                  setPassword('student123');
-                }}
-                className="p-2 bg-slate-950 border border-slate-800 hover:border-indigo-500/50 rounded-lg text-left transition-colors text-slate-300"
-              >
-                <span className="text-indigo-400 block font-sans text-[10px] font-bold">Student Account</span>
-                tommy@jsstudyhub.local
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('admin@jsstudyhub.local');
-                  setPassword('admin123');
-                }}
-                className="p-2 bg-slate-950 border border-slate-800 hover:border-rose-500/50 rounded-lg text-left transition-colors text-slate-300"
-              >
-                <span className="text-rose-400 block font-sans text-[10px] font-bold">Admin Account</span>
-                admin@jsstudyhub.local
-              </button>
-            </div>
-          </div>
         </div>
 
         <p className="text-center text-xs text-slate-500">

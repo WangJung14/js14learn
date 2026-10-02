@@ -1640,6 +1640,127 @@ async function runQA() {
       regJoinGroupRes.status === 201 || regJoinGroupRes.status === 200,
     );
 
+    // ==========================================
+    // PHASE 7: ADMIN FIXES, DASHBOARD & LOGIN QA (#147 - #158)
+    // ==========================================
+    console.log('\n--- PHASE 7: USER MANAGEMENT, REVIEW SUBMISSIONS & DASHBOARD TESTS (#147 - #158) ---');
+
+    // #147 User Management loads successfully for ADMIN
+    const adminUsersRes = await request('/users', 'GET', null, adminToken);
+    assert(
+      '147. User Management loads successfully for ADMIN',
+      adminUsersRes.status === 200 && Array.isArray(adminUsersRes.data),
+    );
+
+    // #148 User Management rejects STUDENT
+    const studentUsersRes = await request('/users', 'GET', null, studentToken);
+    assert(
+      '148. User Management rejects STUDENT with 403 Forbidden',
+      studentUsersRes.status === 403,
+    );
+
+    // #149 User Management handles user list safely
+    assert(
+      '149. User Management returns valid user list with safe fields',
+      Array.isArray(adminUsersRes.data) &&
+        adminUsersRes.data.length > 0 &&
+        adminUsersRes.data.every((u) => u.id && u.email && u.role),
+    );
+
+    // #150 User Management handles role updates
+    const roleUpdateRes = await request(
+      `/users/${p6RegUser.data.user.id}/role`,
+      'PATCH',
+      { role: 'STUDENT' },
+      adminToken,
+    );
+    assert(
+      '150. User Management handles role updates correctly for ADMIN',
+      roleUpdateRes.status === 200 && roleUpdateRes.data?.role === 'STUDENT',
+    );
+
+    // #151 Review Submissions loads successfully
+    const adminSubsRes = await request('/admin/submissions', 'GET', null, adminToken);
+    assert(
+      '151. Review Submissions loads successfully for ADMIN',
+      adminSubsRes.status === 200 && Array.isArray(adminSubsRes.data),
+    );
+
+    // #152 Review Submissions handles status filter
+    const approvedSubsRes = await request('/admin/submissions?status=APPROVED', 'GET', null, adminToken);
+    assert(
+      '152. Review Submissions handles status query filter',
+      approvedSubsRes.status === 200 && Array.isArray(approvedSubsRes.data),
+    );
+
+    // #153 Review Submissions handles PENDING submission
+    const pendingSubsRes = await request('/admin/submissions?status=PENDING', 'GET', null, adminToken);
+    assert(
+      '153. Review Submissions handles PENDING submission filter',
+      pendingSubsRes.status === 200 && Array.isArray(pendingSubsRes.data),
+    );
+
+    // #154 Review Submissions handles CODE submission
+    const codeSubCreate = await request(
+      '/submissions/code',
+      'POST',
+      {
+        exerciseId: targetExercise.id,
+        code: 'function solve() { return true; }',
+        executionSummary: { passed: 1, total: 1, durationMs: 15 },
+        note: 'Code submission test for Admin review',
+      },
+      studentToken,
+    );
+    const adminSubsAfterCode = await request('/admin/submissions', 'GET', null, adminToken);
+    const codeSubFound = adminSubsAfterCode.data?.find(
+      (s) => s.id === codeSubCreate.data?.id,
+    );
+    assert(
+      '154. Review Submissions handles CODE submission with source code & tests',
+      (codeSubCreate.status === 201 || codeSubCreate.status === 200) &&
+        Boolean(codeSubFound?.code || codeSubFound?.submissionType === 'CODE'),
+    );
+
+    // #155 Review Submissions rejects STUDENT
+    const studentSubReviewRes = await request('/admin/submissions', 'GET', null, studentToken);
+    assert(
+      '155. Review Submissions rejects STUDENT with 403 Forbidden',
+      studentSubReviewRes.status === 403,
+    );
+
+    // #156 Login no longer exposes test account credentials
+    const fs = require('fs');
+    const path = require('path');
+    const loginPagePath = path.resolve(__dirname, '../frontend/app/(auth)/login/page.tsx');
+    const loginPageContent = fs.readFileSync(loginPagePath, 'utf8');
+    const hasExposedCredentials =
+      loginPageContent.includes('tommy@jsstudyhub.local') ||
+      loginPageContent.includes('admin@jsstudyhub.local') ||
+      loginPageContent.includes('student123') ||
+      loginPageContent.includes('Quick Test Credentials');
+    assert(
+      '156. Login page no longer exposes test account credentials or quick shortcuts',
+      hasExposedCredentials === false,
+    );
+
+    // #157 Dashboard loads without runtime error
+    const dashboardRes = await request('/dashboard', 'GET', null, studentToken);
+    assert(
+      '157. Dashboard API loads without runtime error and returns complete dataset',
+      dashboardRes.status === 200 &&
+        Boolean(dashboardRes.data?.user) &&
+        Boolean(dashboardRes.data?.progress) &&
+        Boolean(dashboardRes.data?.statistics),
+    );
+
+    // #158 Dashboard handles API failure gracefully
+    const unauthDashboardRes = await request('/dashboard', 'GET', null, 'invalid-jwt-token');
+    assert(
+      '158. Dashboard rejects unauthorized requests with 401 Unauthorized',
+      unauthDashboardRes.status === 401,
+    );
+
     // Summary
     console.log('\n=== INTEGRATION QA SUMMARY ===');
     const passed = results.filter((r) => r.pass).length;

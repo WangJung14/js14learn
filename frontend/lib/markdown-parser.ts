@@ -127,26 +127,15 @@ export function parseInlineTokens(text: string): InlineToken[] {
   return tokens.length > 0 ? tokens : [{ type: 'text', content: text }];
 }
 
-// Parse Markdown String into Structured Blocks
-export function parseLessonContent(markdown: string): ParsedLesson {
+// Parse Markdown String into raw Structured Blocks
+export function parseMarkdownBlocks(markdown: string): ContentBlock[] {
   if (!markdown || !markdown.trim()) {
-    return {
-      title: undefined,
-      introBlocks: [],
-      sections: [],
-      toc: [],
-      estimatedMinutes: 1,
-    };
+    return [];
   }
 
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const blocks: ContentBlock[] = [];
-  const toc: TocItem[] = [];
-  let mainTitle: string | undefined = undefined;
-
   let i = 0;
-  const wordCount = markdown.split(/\s+/).filter(Boolean).length;
-  const estimatedMinutes = Math.max(1, Math.ceil(wordCount / 180));
 
   while (i < lines.length) {
     const line = lines[i];
@@ -185,14 +174,18 @@ export function parseLessonContent(markdown: string): ParsedLesson {
       continue;
     }
 
-    // 3. GitHub / Custom Callouts (> [!TIP], > [!NOTE], :::tip)
-    if (trimmed.startsWith('> [!') || trimmed.startsWith(':::')) {
+    // 3. GitHub / Custom Callouts (> [!TIP], > [!NOTE], [!TIP], :::tip)
+    if (
+      trimmed.startsWith('> [!') ||
+      trimmed.startsWith('[!') ||
+      trimmed.startsWith(':::')
+    ) {
       let calloutType: CalloutType = 'info';
       let calloutTitle = 'Note';
       const calloutLines: string[] = [];
 
-      if (trimmed.startsWith('> [!')) {
-        const typeMatch = trimmed.match(/^>\s*\[!([A-Za-z]+)\]\s*(.*)$/);
+      if (trimmed.startsWith('> [!') || trimmed.startsWith('[!')) {
+        const typeMatch = trimmed.match(/^>?\s*\[!([A-Za-z]+)\]\s*(.*)$/);
         const tag = (typeMatch?.[1] || 'note').toLowerCase();
         if (tag === 'tip') {
           calloutType = 'tip';
@@ -213,7 +206,10 @@ export function parseLessonContent(markdown: string): ParsedLesson {
         if (typeMatch?.[2]) calloutTitle = typeMatch[2];
 
         i++;
-        while (i < lines.length && lines[i].trim().startsWith('>')) {
+        while (
+          i < lines.length &&
+          (lines[i].trim().startsWith('>') || (trimmed.startsWith('[!') && lines[i].trim() && !lines[i].trim().startsWith('#') && !lines[i].trim().startsWith('```')))
+        ) {
           calloutLines.push(lines[i].replace(/^>\s?/, ''));
           i++;
         }
@@ -288,14 +284,6 @@ export function parseLessonContent(markdown: string): ParsedLesson {
       const title = headingMatch[2].trim();
       const id = slugify(title);
 
-      if (level === 1 && !mainTitle) {
-        mainTitle = title;
-      }
-
-      if (level === 2 || level === 3) {
-        toc.push({ id, title, level });
-      }
-
       blocks.push({
         type: 'heading',
         level,
@@ -321,7 +309,6 @@ export function parseLessonContent(markdown: string): ParsedLesson {
           .slice(1, -1)
           .map((c) => ({ tokens: parseInlineTokens(c.trim()) }));
 
-        // Optional align separator row check
         const rows: TableRow[] = [];
         const startIndex = /^[|\s-:]+$/.test(tableLines[1]) ? 2 : 1;
 
@@ -362,8 +349,11 @@ export function parseLessonContent(markdown: string): ParsedLesson {
           items.push(parseInlineTokens(currentNumber[1].trim()));
           i++;
         } else if (currentTrim === '') {
-          // If followed by another list item, continue, else stop
-          if (i + 1 < lines.length && (/^[-*+]\s+/.test(lines[i + 1].trim()) || /^\d+\.\s+/.test(lines[i + 1].trim()))) {
+          if (
+            i + 1 < lines.length &&
+            (/^[-*+]\s+/.test(lines[i + 1].trim()) ||
+              /^\d+\.\s+/.test(lines[i + 1].trim()))
+          ) {
             i++;
           } else {
             break;
@@ -389,6 +379,7 @@ export function parseLessonContent(markdown: string): ParsedLesson {
       !lines[i].trim().startsWith('#') &&
       !lines[i].trim().startsWith('```') &&
       !lines[i].trim().startsWith('>') &&
+      !lines[i].trim().startsWith('[!') &&
       !lines[i].trim().startsWith(':::') &&
       !lines[i].trim().startsWith('|') &&
       !/^[-*+]\s+/.test(lines[i].trim()) &&
@@ -406,6 +397,41 @@ export function parseLessonContent(markdown: string): ParsedLesson {
       });
     }
   }
+
+  return blocks;
+}
+
+// Parse Markdown String into Structured Blocks
+export function parseLessonContent(markdown: string): ParsedLesson {
+  if (!markdown || !markdown.trim()) {
+    return {
+      title: undefined,
+      introBlocks: [],
+      sections: [],
+      toc: [],
+      estimatedMinutes: 1,
+    };
+  }
+
+  const blocks = parseMarkdownBlocks(markdown);
+  const toc: TocItem[] = [];
+  let mainTitle: string | undefined = undefined;
+
+  for (const block of blocks) {
+    if (block.type === 'heading') {
+      if (block.level === 1 && !mainTitle) {
+        mainTitle = block.title;
+      }
+      if ((block.level === 2 || block.level === 3) && block.title && block.id) {
+        toc.push({ id: block.id, title: block.title, level: block.level });
+      }
+    }
+  }
+
+  const wordCount = markdown.split(/\s+/).filter(Boolean).length;
+  const estimatedMinutes = Math.max(1, Math.ceil(wordCount / 180));
+
+
 
   // Structure blocks into Collapsible Major Sections based on H2 headings
   const introBlocks: ContentBlock[] = [];

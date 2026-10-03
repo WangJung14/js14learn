@@ -2,31 +2,31 @@
 
 import React, { useEffect, useState, use, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Upload, FileCode, CheckCircle2, Clock } from 'lucide-react';
 import { exercisesApi, submissionsApi, attendanceApi } from '@/lib/api';
 import { Exercise, Submission } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDate } from '@/lib/utils';
 import { CodingWorkspace } from '@/components/code-editor/coding-workspace';
 import { AssessmentWorkspace } from '@/components/assessments/assessment-workspace';
+import { ExerciseHeader } from '@/components/exercises/exercise-header';
+import { ExerciseContentRenderer } from '@/components/exercises/exercise-content-renderer';
+import { ExerciseFileWorkspace } from '@/components/exercises/exercise-file-workspace';
+import { ExerciseStatusCard } from '@/components/exercises/exercise-status-card';
+import { ExerciseSubmissionHistory } from '@/components/exercises/exercise-submission-history';
+import { BookOpen, Code2 } from 'lucide-react';
 
-export default function ExerciseDetailPage({ params }: { params: Promise<{ exerciseId: string }> }) {
+export default function ExerciseDetailPage({
+  params,
+}: {
+  params: Promise<{ exerciseId: string }>;
+}) {
   const { exerciseId } = use(params);
 
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  // Form State
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [note, setNote] = useState('');
 
   const loadExerciseData = useCallback(async () => {
     try {
@@ -49,56 +49,19 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
     void loadExerciseData();
   }, [loadExerciseData]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.size > 10 * 1024 * 1024) {
-        setError('Selected file size exceeds maximum limit of 10 MB.');
-        setSelectedFile(null);
-        return;
-      }
-      setError(null);
-      setSelectedFile(file);
-    }
-  };
-
-  const handleSubmitSolution = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    if (!selectedFile) {
-      setError('Please select a solution file to upload.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await submissionsApi.submit({
-        exerciseId,
-        file: selectedFile,
-        note: note.trim() || undefined,
-      });
-
-      setSuccess('Solution uploaded successfully to Supabase Storage! Awaiting admin review.');
-      setSelectedFile(null);
-      setNote('');
-      await loadExerciseData();
-    } catch (err: unknown) {
-      setError((err as Error).message || 'Failed to upload solution.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   if (loading) {
     return (
-      <div className="space-y-6 max-w-5xl mx-auto">
-        <Skeleton className="h-6 w-32" />
-        <Skeleton className="h-10 w-3/4" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
+      <div className="space-y-6 max-w-6xl mx-auto px-2 sm:px-4">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-32 w-full rounded-2xl" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            <Skeleton className="h-96 rounded-2xl" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-48 rounded-2xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+          </div>
         </div>
       </div>
     );
@@ -106,10 +69,13 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
 
   if (error && !exercise) {
     return (
-      <div className="p-6 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-sm max-w-5xl mx-auto space-y-4">
-        <p>{error}</p>
+      <div className="p-6 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-400 text-sm max-w-4xl mx-auto space-y-4">
+        <p className="font-semibold">Unable to load exercise:</p>
+        <p className="text-slate-300 text-xs">{error}</p>
         <Link href="/roadmap">
-          <Button variant="outline" size="sm">Back to Roadmap</Button>
+          <Button variant="outline" size="sm">
+            Back to Roadmap
+          </Button>
         </Link>
       </div>
     );
@@ -121,210 +87,108 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ exerc
     (exercise.questions && exercise.questions.length > 0) ||
     (exercise.assessmentType && exercise.assessmentType !== 'NONE');
 
-  const questionCount = exercise.totalQuestions || exercise.questions?.length || 1;
-
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
-      {/* Back Navigation */}
-      {exercise.studyDay && (
-        <Link
-          href={`/roadmap/${exercise.studyDay.id}`}
-          className="inline-flex items-center space-x-2 text-xs font-semibold text-slate-400 hover:text-indigo-400 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>
-            Back to Day {exercise.studyDay.dayNumber}: {exercise.studyDay.title}
-          </span>
-        </Link>
-      )}
+    <div className="space-y-6 max-w-6xl mx-auto px-2 sm:px-4 pb-16">
+      {/* 1. Header & Navigation */}
+      <ExerciseHeader exercise={exercise} />
 
-      {/* Exercise Title Header */}
-      <div className="space-y-3 border-b border-slate-800 pb-6">
-        <div className="flex items-center space-x-3">
-          <Badge variant={exercise.difficulty} />
-          {exercise.submissionStatus && (
-            <Badge variant={exercise.submissionStatus} />
-          )}
-          {isAssessment && (
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              Assessment ({questionCount} Question{questionCount > 1 ? 's' : ''})
-            </span>
-          )}
-          {exercise.isCoding && !isAssessment && (
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              Interactive Coding Exercise
-            </span>
-          )}
-        </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-100">
-          {exercise.title}
-        </h1>
-        <p className="text-sm text-slate-400 leading-relaxed">
-          {exercise.description}
-        </p>
-      </div>
-
+      {/* 2. Main Content Layout according to Exercise Type */}
       {isAssessment ? (
-        <AssessmentWorkspace
-          exercise={exercise}
-          onCompletion={loadExerciseData}
-        />
-      ) : exercise.isCoding ? (
-        <div className="space-y-8">
-          {/* Interactive Monaco & Worker Compiler */}
-          <CodingWorkspace
-            exercise={exercise}
-            onSubmissionComplete={loadExerciseData}
-          />
-
-          {/* Submission History Section for Coding Exercise */}
-          {submissions.length > 0 && (
-            <Card className="border-slate-800 bg-slate-900/60">
-              <CardHeader className="flex flex-row items-center space-x-2 border-b border-slate-800 pb-4">
-                <FileCode className="w-5 h-5 text-indigo-400" />
-                <CardTitle className="text-lg">Your Submission History</CardTitle>
+        /* Assessment Mode (Multi-Question Assessment) */
+        <div className="space-y-6">
+          {exercise.description && (
+            <Card className="border-slate-800 bg-slate-900/60 shadow-lg overflow-hidden">
+              <CardHeader className="flex flex-row items-center space-x-2 border-b border-slate-800/80 pb-3 bg-slate-950/40">
+                <BookOpen className="w-4 h-4 text-indigo-400" />
+                <CardTitle className="text-sm font-bold text-slate-200">
+                  Assessment Overview &amp; Instructions
+                </CardTitle>
               </CardHeader>
-
-              <CardContent className="pt-6 space-y-3">
-                {submissions.map((sub) => (
-                  <div
-                    key={sub.id}
-                    className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs font-mono font-semibold text-indigo-300">
-                          {sub.submissionType === 'CODE' ? 'JavaScript Code Submission' : sub.fileName}
-                        </span>
-                        <Badge variant={sub.status} />
-                      </div>
-                      <p className="text-xs text-slate-400">
-                        Submitted on: <span className="text-slate-300">{formatDate(sub.submittedAt)}</span>
-                      </p>
-                    </div>
-
-                    <Link href={`/submissions/${sub.id}`}>
-                      <Button variant="outline" size="sm" className="text-xs">
-                        View Submission Details &rarr;
-                      </Button>
-                    </Link>
-                  </div>
-                ))}
+              <CardContent className="pt-5 pb-6">
+                <ExerciseContentRenderer content={exercise.description} />
               </CardContent>
             </Card>
           )}
+
+          <AssessmentWorkspace
+            exercise={exercise}
+            onCompletion={loadExerciseData}
+          />
+        </div>
+      ) : exercise.isCoding ? (
+        /* Interactive Coding Mode (Monaco + Test Runner) */
+        <div className="space-y-6">
+          {/* Problem Statement Card */}
+          <Card className="border-slate-800 bg-slate-900/70 shadow-lg overflow-hidden">
+            <CardHeader className="flex flex-row items-center space-x-2 border-b border-slate-800/80 pb-3.5 bg-slate-950/40">
+              <BookOpen className="w-4 h-4 text-indigo-400" />
+              <CardTitle className="text-base font-bold text-slate-100">
+                Problem Description &amp; Requirements
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 pb-7">
+              <ExerciseContentRenderer content={exercise.description} />
+            </CardContent>
+          </Card>
+
+          {/* Monaco Coding Workspace */}
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2 text-sm font-bold text-slate-200 px-1">
+              <Code2 className="w-4 h-4 text-purple-400" />
+              <span>Interactive JavaScript Editor &amp; Test Suite</span>
+            </div>
+            <CodingWorkspace
+              exercise={exercise}
+              onSubmissionComplete={loadExerciseData}
+            />
+          </div>
+
+          {/* Submission History */}
+          <ExerciseSubmissionHistory submissions={submissions} />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Left Column: Solution Upload Form */}
-          <Card className="border-indigo-500/30 bg-slate-900/80">
-            <CardHeader className="flex flex-row items-center space-x-2 border-b border-slate-800 pb-4">
-              <Upload className="w-5 h-5 text-indigo-400" />
-              <CardTitle className="text-lg">Upload Solution</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              {error && (
-                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-xs font-medium text-rose-400">
-                  {error}
+        /* Standard File Upload Mode (2-Column Responsive Layout) */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Problem Statement & Markdown Content (65-70% / 8 cols) */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-6">
+            <Card className="border-slate-800 bg-slate-900/70 shadow-xl overflow-hidden">
+              <CardHeader className="flex flex-row items-center space-x-2.5 border-b border-slate-800/80 pb-4 bg-slate-950/40">
+                <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  <BookOpen className="w-4 h-4" />
                 </div>
-              )}
-              {success && (
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400 flex items-center space-x-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                  <span>{success}</span>
+                <div>
+                  <CardTitle className="text-base font-bold text-slate-100">
+                    Problem Statement
+                  </CardTitle>
+                  <p className="text-[11px] text-slate-400">
+                    Read the instructions, requirements, and examples carefully
+                  </p>
                 </div>
-              )}
+              </CardHeader>
 
-              <form onSubmit={handleSubmitSolution} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-300 block">
-                    Select Solution File <span className="text-slate-500">(Max 10MB: .js, .ts, .zip, .pdf, .png)</span>
-                  </label>
-                  <input
-                    type="file"
-                    accept=".js,.ts,.zip,.pdf,.png"
-                    onChange={handleFileChange}
-                    required
-                    className="w-full text-xs text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer bg-slate-950 border border-slate-800 rounded-lg p-2"
-                  />
-                  {selectedFile && (
-                    <p className="text-[11px] text-indigo-400 font-mono">
-                      Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
-                    </p>
-                  )}
-                </div>
+              <CardContent className="pt-6 pb-8 px-5 sm:px-7">
+                <ExerciseContentRenderer content={exercise.description} />
+              </CardContent>
+            </Card>
+          </div>
 
-                <Textarea
-                  id="note"
-                  label="Submission Note (Optional)"
-                  placeholder="Describe your implementation logic or key takeaways..."
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  rows={3}
-                />
+          {/* Right Column: Sticky Sidebar (Status + Solution Upload + History) (30-35% / 4-5 cols) */}
+          <div className="lg:col-span-5 xl:col-span-4 space-y-6 lg:sticky lg:top-6">
+            {/* Exercise Status Card */}
+            <ExerciseStatusCard
+              exercise={exercise}
+              submissions={submissions}
+            />
 
-                <Button type="submit" isLoading={submitting} className="w-full">
-                  <Upload className="w-4 h-4 mr-2" /> Upload &amp; Submit Solution
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+            {/* Upload Solution Workspace */}
+            <ExerciseFileWorkspace
+              exerciseId={exercise.id}
+              onSubmissionSuccess={loadExerciseData}
+            />
 
-          {/* Right Column: Submission History */}
-          <Card>
-            <CardHeader className="flex flex-row items-center space-x-2 border-b border-slate-800 pb-4">
-              <FileCode className="w-5 h-5 text-indigo-400" />
-              <CardTitle className="text-lg">Your Submission History</CardTitle>
-            </CardHeader>
-
-            <CardContent className="pt-6 space-y-4">
-              {submissions.length === 0 ? (
-                <div className="text-center py-8 space-y-2 text-slate-500 text-xs">
-                  <Clock className="w-8 h-8 mx-auto text-slate-600" />
-                  <p>No submissions uploaded for this exercise yet.</p>
-                </div>
-              ) : (
-                submissions.map((sub) => (
-                  <div
-                    key={sub.id}
-                    className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono font-semibold text-indigo-300">
-                        {sub.fileName}
-                      </span>
-                      <Badge variant={sub.status} />
-                    </div>
-
-                    <p className="text-xs text-slate-400">
-                      Submitted on: <span className="text-slate-300">{formatDate(sub.submittedAt)}</span>
-                    </p>
-
-                    {sub.note && (
-                      <p className="text-xs text-slate-300 italic bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-                        &quot;{sub.note}&quot;
-                      </p>
-                    )}
-
-                    {sub.adminNote && (
-                      <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg text-xs space-y-1">
-                        <span className="font-bold text-indigo-400 block">Admin Feedback:</span>
-                        <p className="text-slate-200">{sub.adminNote}</p>
-                      </div>
-                    )}
-
-                    <div className="pt-1">
-                      <Link href={`/submissions/${sub.id}`}>
-                        <Button variant="ghost" size="sm" className="w-full text-xs">
-                          View Submission Details &rarr;
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+            {/* Submission History */}
+            <ExerciseSubmissionHistory submissions={submissions} />
+          </div>
         </div>
       )}
     </div>

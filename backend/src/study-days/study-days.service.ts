@@ -37,7 +37,14 @@ export class StudyDaysService {
     await this.checkStudentVisibility(userId);
     const studyDays = await this.prisma.studyDay.findMany({
       orderBy: { order: 'asc' },
-      include: {
+      select: {
+        id: true,
+        dayNumber: true,
+        title: true,
+        description: true,
+        order: true,
+        createdAt: true,
+        updatedAt: true,
         _count: {
           select: { exercises: true },
         },
@@ -50,7 +57,7 @@ export class StudyDaysService {
     });
 
     return studyDays.map((day) => {
-      const dayData = day;
+      const dayData = day as typeof day & { progress?: Array<{ status: ProgressStatus; completedAt: Date | null }> };
       const userProgress =
         dayData.progress && dayData.progress.length > 0
           ? dayData.progress[0]
@@ -61,7 +68,6 @@ export class StudyDaysService {
         dayNumber: day.dayNumber,
         title: day.title,
         description: day.description,
-        content: day.content,
         order: day.order,
         createdAt: day.createdAt,
         updatedAt: day.updatedAt,

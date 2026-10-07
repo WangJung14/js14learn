@@ -42,6 +42,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const adminNavItems = [
     { name: 'Admin Overview', href: '/admin', icon: ShieldAlert },
     { name: 'Manage Roadmap', href: '/admin/study-days', icon: Map },
+    { name: 'Java Curriculum Docs', href: '/admin/java-roadmap', icon: Sparkles },
     { name: 'Manage Exercises', href: '/admin/exercises', icon: Code2 },
     { name: 'Question Bank', href: '/admin/question-bank', icon: HelpCircle },
     { name: 'Review Submissions', href: '/admin/submissions', icon: FileCheck },

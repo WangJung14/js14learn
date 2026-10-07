@@ -10,6 +10,7 @@ import {
   Shield,
   ArrowRight,
   Clock,
+  Sparkles,
   AlertTriangle,
 } from 'lucide-react';
 import { usersApi, studyDaysApi, submissionsApi } from '@/lib/api';
@@ -135,6 +136,21 @@ export default function AdminDashboardPage() {
           <Link href="/admin/study-days">
             <Button variant="outline" size="sm" className="w-full">
               Manage Days <ArrowRight className="w-4 h-4 ml-1.5" />
+            </Button>
+          </Link>
+        </Card>
+
+        <Card className="p-6 flex flex-col justify-between space-y-4 hover:border-indigo-500/50 transition-colors">
+          <div className="space-y-2">
+            <div className="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-lg w-fit">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-slate-100">Java Curriculum Docs</h3>
+            <p className="text-xs text-slate-400">Biên soạn và quản lý tài liệu lý thuyết 30 ngày Java Core (Level 1 → 2 → 3).</p>
+          </div>
+          <Link href="/admin/java-roadmap">
+            <Button variant="outline" size="sm" className="w-full border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10">
+              Biên Soạn Tài Liệu <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </Link>
         </Card>

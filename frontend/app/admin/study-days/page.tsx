@@ -80,23 +80,33 @@ export default function AdminStudyDaysPage() {
     setIsModalOpen(true);
   };
 
-  const openEditModal = (day: StudyDay) => {
+  const openEditModal = async (day: StudyDay) => {
     setEditingDay(day);
     setDayNumber(day.dayNumber);
     setOrder(day.order);
     setTitle(day.title);
     setDescription(day.description);
-    setContent(day.content);
+    setContent(day.content || '');
     setFormError(null);
     setIsModalOpen(true);
+    if (!day.content) {
+      try {
+        const fullDay = await studyDaysApi.getById(day.id);
+        if (fullDay?.content) {
+          setContent(fullDay.content);
+        }
+      } catch {
+        // Content will remain fallback
+      }
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
-    if (!title || !description || !content) {
-      setFormError('Please fill in all required fields.');
+    if (!title || !description) {
+      setFormError('Please fill in title and description.');
       return;
     }
 
@@ -107,7 +117,7 @@ export default function AdminStudyDaysPage() {
           dayNumber,
           title: title.trim(),
           description: description.trim(),
-          content,
+          ...(content ? { content } : {}),
           order,
         });
       } else {
@@ -115,7 +125,7 @@ export default function AdminStudyDaysPage() {
           dayNumber,
           title: title.trim(),
           description: description.trim(),
-          content,
+          content: content || '# ' + title.trim(),
           order,
         });
       }

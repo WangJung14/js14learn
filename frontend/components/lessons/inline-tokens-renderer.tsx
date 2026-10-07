@@ -8,8 +8,15 @@ interface InlineTokensRendererProps {
   tokens: InlineToken[];
 }
 
-export function InlineTokensRenderer({ tokens }: InlineTokensRendererProps) {
-  if (!tokens || tokens.length === 0) return null;
+export const InlineTokensRenderer = React.memo(function InlineTokensRenderer({
+  tokens,
+}: InlineTokensRendererProps) {
+  if (!tokens || !Array.isArray(tokens) || tokens.length === 0) return null;
+
+  // Single plain text token fast path
+  if (tokens.length === 1 && tokens[0]?.type === 'text') {
+    return <>{tokens[0].content}</>;
+  }
 
   return (
     <>
@@ -50,9 +57,9 @@ export function InlineTokensRenderer({ tokens }: InlineTokensRendererProps) {
             );
           case 'text':
           default:
-            return <span key={idx}>{token.content}</span>;
+            return <React.Fragment key={idx}>{token.content}</React.Fragment>;
         }
       })}
     </>
   );
-}
+});

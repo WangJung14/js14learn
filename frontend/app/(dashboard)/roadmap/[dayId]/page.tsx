@@ -58,7 +58,7 @@ export default function StudyDayDetailPage({ params }: { params: Promise<{ dayId
   }
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
+    <div className="space-y-8 max-w-5xl mx-auto">
       {/* Back Link */}
       <Link
         href="/roadmap"
